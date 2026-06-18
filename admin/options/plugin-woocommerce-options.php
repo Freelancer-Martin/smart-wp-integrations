@@ -50,9 +50,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         private function s_connection(): array { return $this->s_server_url(); }
 
         private function s_merit( array $s ): array {
-            $client = new MeritServersDataClient();
-            $depts  = []; try { $depts = (array)$client->getDepartments(); } catch (\Exception $e) {}
-            $dopts  = [ '' => '— vali osakond —' ];
+            $client  = new MeritServersDataClient();
+            $depts   = []; try { $depts = (array)$client->getDepartments(); } catch (\Exception $e) {}
+            $saved   = get_option( 'smart_wp_integtaion_deparment', '' );
+            if ( $saved && ! in_array( $saved, $depts, true ) ) $depts[] = $saved;
+            $dopts   = [ '' => '— vali osakond —' ];
             foreach ( $depts as $c ) { $dopts[$c] = $c; }
             return [
                 [ 'type' => 'title', 'id' => 'swi_merit_conn' ],
