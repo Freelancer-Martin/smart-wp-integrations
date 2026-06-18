@@ -27,7 +27,7 @@ class SWI_SmartAccounts_Create_Invoices {
 
     public function __construct() {
         $status = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $hook   = 'woocommerce_order_status_' . ltrim( $status, 'wc-' );
+        $hook   = 'woocommerce_order_status_' . ( str_starts_with( $status, 'wc-' ) ? substr( $status, 3 ) : $status );
         add_action( $hook, [ $this, 'auto_send_order' ], 20, 1 );
 
         add_action( 'wp_ajax_swi_sa_sync_check',    [ $this, 'handle_sync_check' ] );
@@ -261,7 +261,7 @@ class SWI_SmartAccounts_Create_Invoices {
 
         $prefix  = get_option( 'swi_smartaccounts_prefix', 'SA' );
         $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => ltrim( $status, 'wc-' ) ] );
+        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
 
         $base_url = LocalApiClient::get_base_url_public();
         $lic_key  = get_option( 'swi_license_key', '' );
@@ -399,8 +399,7 @@ class SWI_SmartAccounts_Create_Invoices {
         }
 
         $status   = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $status_q = ltrim( $status, 'wc-' );
-        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status_q ] );
+        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status ] );
         $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) ), 0, 50 );
 
         // Debug: kui 0 orderit, tagasta info miks
@@ -410,7 +409,7 @@ class SWI_SmartAccounts_Create_Invoices {
                 'sent'    => 0, 'failed' => 0, 'total' => 0,
                 'message' => 'Kõik arved on juba saadetud.',
                 '_debug'  => [
-                    'queried_status' => $status_q,
+                    'queried_status' => $status,
                     'all_found'      => count( $all ),
                     'order_statuses' => $all_statuses,
                 ],

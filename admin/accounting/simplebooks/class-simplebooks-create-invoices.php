@@ -45,7 +45,7 @@ class SWI_Simplebooks_Create_Invoices {
      */
     public function __construct() {
         $status = get_option( 'swi_simplebooks_order_status', 'wc-completed' );
-        $hook   = 'woocommerce_order_status_' . ltrim( $status, 'wc-' );
+        $hook   = 'woocommerce_order_status_' . ( str_starts_with( $status, 'wc-' ) ? substr( $status, 3 ) : $status );
         add_action( $hook, [ $this, 'auto_send_order' ], 20, 1 );
 
         // AJAX
