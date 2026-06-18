@@ -72,12 +72,17 @@ class SWI_Simplebooks_Create_Invoices {
     /* ─── WC orders kolumn ─── */
 
     public function add_order_column( array $cols ): array {
-        $new = [];
+        $new  = [];
+        $added = false;
         foreach ( $cols as $key => $label ) {
             $new[ $key ] = $label;
             if ( $key === 'order_status' ) {
                 $new['swi_simplebooks'] = 'SB';
+                $added = true;
             }
+        }
+        if ( ! $added ) {
+            $new['swi_simplebooks'] = 'SB';
         }
         return $new;
     }

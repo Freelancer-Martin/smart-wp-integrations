@@ -50,12 +50,17 @@ class SWI_SmartAccounts_Create_Invoices {
     /* ─── WC orders kolumn ─── */
 
     public function add_order_column( array $cols ): array {
-        $new = [];
+        $new   = [];
+        $added = false;
         foreach ( $cols as $key => $label ) {
             $new[ $key ] = $label;
             if ( $key === 'order_status' ) {
                 $new['swi_smartaccounts'] = 'SA';
+                $added = true;
             }
+        }
+        if ( ! $added ) {
+            $new['swi_smartaccounts'] = 'SA';
         }
         return $new;
     }
