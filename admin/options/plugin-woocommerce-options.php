@@ -20,7 +20,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             add_action( 'woocommerce_admin_field_swi_payment_map',  [ $this, 'field_payment_map' ] );
             add_action( 'woocommerce_admin_field_swi_tax_map',      [ $this, 'field_tax_map' ] );
             add_action( 'woocommerce_admin_field_swi_shipping_map', [ $this, 'field_shipping_map' ] );
-            add_action( 'woocommerce_update_options', [ $this, 'save' ] );
         }
 
         public function get_settings( $section = '' ): array {
@@ -478,20 +477,61 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
         /* ─── SAVE ─── */
         public function save() {
-            woocommerce_update_options( $this->get_settings() );
-            $maps = [
+            // Text / URL fields
+            foreach ( [
+                'smart_wp_integration_server_url',
+                'smart_wp_integtaion_license_text',
+                'smart_wp_integtaion_crypto_text',
+                'smart_wp_integtaion_arve_eesliides',
+                'smart_wp_integtaion_maksetahtaeg',
+                'swi_simplebooks_license_key',
+                'swi_simplebooks_crypto_key',
+                'swi_simplebooks_prefix',
+                'swi_smartaccounts_license_key',
+                'swi_smartaccounts_crypto_key',
+                'swi_smartaccounts_prefix',
+            ] as $field ) {
+                if ( isset( $_POST[ $field ] ) ) {
+                    update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
+                }
+            }
+
+            // Select fields
+            foreach ( [
+                'smart_wp_integtaion_invoice_status',
+                'smart_wp_integtaion_maksumaar',
+                'smart_wp_integtaion_arve_ridade_tyyp',
+                'smart_wp_integtaion_deparment',
+                'swi_simplebooks_order_status',
+                'swi_smartaccounts_order_status',
+            ] as $field ) {
+                if ( isset( $_POST[ $field ] ) ) {
+                    update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
+                }
+            }
+
+            // Checkboxes — absent from POST means unchecked
+            foreach ( [
+                'smart_wp_integtaion_enable',
+                'swi_simplebooks_enable',
+                'swi_smartaccounts_enable',
+            ] as $field ) {
+                update_option( $field, isset( $_POST[ $field ] ) ? 'yes' : 'no' );
+            }
+
+            // Maps (country, payment, tax, shipping)
+            foreach ( [
                 $this->opt_payment_map  => isset($_POST[$this->opt_payment_map])  ? (array)$_POST[$this->opt_payment_map]  : [],
                 $this->opt_shipping_map => isset($_POST[$this->opt_shipping_map]) ? (array)$_POST[$this->opt_shipping_map] : [],
                 $this->opt_tax_map      => isset($_POST[$this->opt_tax_map])      ? (array)$_POST[$this->opt_tax_map]      : [],
                 $this->opt_country_map  => isset($_POST[$this->opt_country_map])  ? (array)$_POST[$this->opt_country_map]  : [],
-            ];
-            foreach ( $maps as $key => $val ) {
-                $clean = $this->deep_sanitize($val);
-                $clean = array_filter($clean, function($row){
-                    if (is_array($row)){ foreach($row as $v){ if((string)$v!=='') return true; } return false; }
+            ] as $key => $val ) {
+                $clean = $this->deep_sanitize( $val );
+                $clean = array_filter( $clean, function( $row ) {
+                    if ( is_array( $row ) ) { foreach ( $row as $v ) { if ( (string)$v !== '' ) return true; } return false; }
                     return (string)$row !== '';
-                });
-                update_option($key, $clean, false);
+                } );
+                update_option( $key, $clean, false );
             }
         }
 
