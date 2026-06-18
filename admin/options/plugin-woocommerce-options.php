@@ -304,7 +304,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 </div>
 
                 <!-- ══ TAB: ÜHENDUS ══ -->
-                <div class="swi-tabview active" id="swi-tab-connection" style="overflow-y:auto; padding:28px 32px;">
+                <div class="swi-tabview active" id="swi-tab-connection"><div class="swi-content">
                     <?php if ( isset($_GET['settings-updated']) ) : ?>
                     <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
                     <?php endif; ?>
@@ -316,7 +316,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <div class="swi-card" style="max-width:680px;">
                         <?php woocommerce_admin_fields( $conn_s ); ?>
                     </div>
-                </div>
+                </div></div>
 
                 <!-- ══ TAB: MERIT AKTIVA ══ -->
                 <div class="swi-tabview" id="swi-tab-merit">
