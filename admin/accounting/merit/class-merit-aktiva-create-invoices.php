@@ -228,7 +228,7 @@ class My_Simple_Ajax_Plugin {
 
             $payload_arrays[] = [
                 'Item'           => [
-                    'Code'        => $sku,
+                    'Code'        => $sku ? substr( $sku, 0, 20 ) : null,
                     'Description' => $item->get_name(),
                     'Type'        => (int) $this->arve_ridade_tyyp,
                     'UOMName'     => 'tk',
