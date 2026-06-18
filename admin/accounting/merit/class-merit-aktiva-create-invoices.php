@@ -100,6 +100,10 @@ class My_Simple_Ajax_Plugin {
             if ( 'wc-' . $order->get_status() !== $this->order_Status ) {
                 continue;
             }
+            // Esmane kontroll: WP meta-flag — kiire ja ei sõltu Merit API kättesaadavusest
+            if ( get_post_meta( $order->get_id(), '_swi_sent_merit', true ) ) {
+                continue;
+            }
             $exists = false;
             if ( is_array( $results ) ) {
                 foreach ( $results as $invoice ) {
@@ -282,21 +286,33 @@ class My_Simple_Ajax_Plugin {
         if ( ! class_exists( 'WooCommerce' ) ) {
             wp_send_json_error( [ 'error' => 'WooCommerce ei ole aktiivne!' ] );
         }
+        if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+            wp_send_json_error( [ 'error' => 'Merit Aktiva integratsioon on keelatud.' ] );
+        }
 
-        $payloads = $this->create_invoice();
+        $order_ids = $this->Smart_WP_Filter_Woocommerce_Merit_aktiva_Invoices();
 
-        if ( empty( $payloads ) || isset( $payloads['error'] ) ) {
-            wp_send_json_error( [ 'error' => $payloads['error'] ?? 'Ühtegi orderit ei leitud.' ] );
+        if ( empty( $order_ids ) ) {
+            wp_send_json_error( [ 'error' => 'Ühtegi saatmata orderit ei leitud.' ] );
         }
 
         $results = [];
         $errors  = [];
 
-        foreach ( $payloads as $payload ) {
+        foreach ( $order_ids as $order_id ) {
+            $order = wc_get_order( $order_id );
+            if ( ! $order ) continue;
+            $payload = $this->build_payload_for_order( $order );
+            if ( ! $payload ) continue;
+
             $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
             if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
+                update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+                $order->add_order_note( 'Merit Aktiva: arve edastatud käsitsi (' . $res['status'] . ').' );
                 $results[] = $res;
             } else {
+                $msg = $res['message'] ?? wp_json_encode( $res );
+                $order->add_order_note( 'Merit Aktiva: käsitsi edastamine ebaõnnestus — ' . $msg );
                 $errors[] = $res;
             }
         }
