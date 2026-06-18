@@ -14,13 +14,18 @@
  */
 
 /**
- * The core plugin class.
+ * Plugina põhiklass — käivitab ja seob kõik komponendid kokku.
  *
- * This is used to define internationalization, admin-specific hooks, and
- * public-facing site hooks.
+ * Rakendab WordPress'i standardset plugin-boilerplate mustrit:
+ * - load_dependencies() laeb kõik vajalikud PHP failid
+ * - set_locale() registreerib tõlkefunktsioonid
+ * - define_admin_hooks() registreerib admin-poolsed hookid
+ * - define_public_hooks() registreerib avaliku osa hookid
+ * - run() käivitab loader-i, mis seob kõik hookid WordPressiga
  *
- * Also maintains the unique identifier of this plugin as well as the current
- * version of the plugin.
+ * Loader-muster tähendab, et hookid ei registreerita otse add_action/add_filter
+ * kaudu, vaid kogutakse Loader klassi ja registreeritakse kõik korraga run()-is.
+ * See võimaldab hookide tsentraliseeritud haldust ja lihtsamat testimist.
  *
  * @since      1.0.0
  * @package    Smart_Wp_Integrations
@@ -30,39 +35,48 @@
 class Smart_Wp_Integrations {
 
 	/**
-	 * The loader that's responsible for maintaining and registering all hooks that power
-	 * the plugin.
+	 * Loader objekt, mis kogub ja registreerib kõik plugina hookid WordPressiga.
+	 *
+	 * Loader on vahekiht add_action/add_filter ja tegeliku koodiloogika vahel —
+	 * see võimaldab kõiki hookisid näha ühes kohas ja lihtsustab silumist.
 	 *
 	 * @since    1.0.0
 	 * @access   protected
-	 * @var      Smart_Wp_Integrations_Loader    $loader    Maintains and registers all hooks for the plugin.
+	 * @var      Smart_Wp_Integrations_Loader    $loader
 	 */
 	protected $loader;
 
 	/**
-	 * The unique identifier of this plugin.
+	 * Plugina unikaalne identifikaator WordPressi süsteemis.
+	 *
+	 * Kasutatakse tõlke text domain-ina, skriptide/stiilide handle-ina ning
+	 * seadete registreerimisel. Peab ühtima plugin header-i Text Domain väljaga.
 	 *
 	 * @since    1.0.0
 	 * @access   protected
-	 * @var      string    $plugin_name    The string used to uniquely identify this plugin.
+	 * @var      string    $plugin_name
 	 */
 	protected $plugin_name;
 
 	/**
-	 * The current version of the plugin.
+	 * Plugina praegune versioonumber.
+	 *
+	 * Kasutatakse CSS/JS failide versioneerimiseks (cache busting) —
+	 * wp_enqueue_script() ja wp_enqueue_style() saavad selle versiooninumbrina.
 	 *
 	 * @since    1.0.0
 	 * @access   protected
-	 * @var      string    $version    The current version of the plugin.
+	 * @var      string    $version
 	 */
 	protected $version;
 
 	/**
-	 * Define the core functionality of the plugin.
+	 * Plugina põhifunktsionaalsuse seadistamine.
 	 *
-	 * Set the plugin name and the plugin version that can be used throughout the plugin.
-	 * Load the dependencies, define the locale, and set the hooks for the admin area and
-	 * the public-facing side of the site.
+	 * Konstruktor käivitab kogu plugina seadistamise jada — peale konstruktori
+	 * täitmist on kõik hookid registreeritud ja plugin töövalmis.
+	 * Versioon loetakse SMART_WP_INTEGRATIONS_VERSION konstandist, mis on
+	 * defineeritud plugina peafailis.
 	 *
 	 * @since    1.0.0
 	 */
@@ -82,17 +96,19 @@ class Smart_Wp_Integrations {
 	}
 
 	/**
-	 * Load the required dependencies for this plugin.
+	 * Laeb kõik plugina jaoks vajalikud sõltuvusfailid.
 	 *
-	 * Include the following files that make up the plugin:
+	 * Failide laadimise järjekord on oluline:
+	 * 1. Loader ja i18n (baasklassid)
+	 * 2. WC seaded (options-leht)
+	 * 3. API klient (LocalApiClient — peab olema enne handler klasse)
+	 * 4. Merit handler ja proxy klass
+	 * 5. Simplebooks handler (instantseeritakse kohe kui lubatud)
+	 * 6. Admin ja public klassid (kasutavad eelnevaid)
 	 *
-	 * - Smart_Wp_Integrations_Loader. Orchestrates the hooks of the plugin.
-	 * - Smart_Wp_Integrations_i18n. Defines internationalization functionality.
-	 * - Smart_Wp_Integrations_Admin. Defines all hooks for the admin area.
-	 * - Smart_Wp_Integrations_Public. Defines all hooks for the public side of the site.
-	 *
-	 * Create an instance of the loader which will be used to register the hooks
-	 * with WordPress.
+	 * Simplebooks klass instantseeritakse siin (mitte eraldi failis), kuna
+	 * konstruktor registreerib WC hooki ja seda tuleb teha plugins_loaded ajal.
+	 * Hooki registreerimine hiljem (nt admin_init ajal) jätaks mõned päringud vahele.
 	 *
 	 * @since    1.0.0
 	 * @access   private
@@ -135,16 +151,13 @@ class Smart_Wp_Integrations {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/merit/class-merit-aktiva-get-data-from-merit-server.php';
 
+		// Simplebooks klassi laadimine ja tingimuslik instantseerimine.
+		// Klassifail laetakse alati (et PHP ei annaks "class not found" viga), aga
+		// objekt luuakse ainult siis kui Simplebooks on seadetes lubatud.
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/simplebooks/class-simplebooks-create-invoices.php';
 		if ( get_option( 'swi_simplebooks_enable' ) === 'yes' ) {
 			new SWI_Simplebooks_Create_Invoices();
 		}
-
-		
-
-		
-
-
 
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
@@ -159,15 +172,15 @@ class Smart_Wp_Integrations {
 
 		$this->loader = new Smart_Wp_Integrations_Loader();
 
-	
+
 
 	}
 
 	/**
-	 * Define the locale for this plugin for internationalization.
+	 * Registreerib tõlke text domain WordPressiga.
 	 *
-	 * Uses the Smart_Wp_Integrations_i18n class in order to set the domain and to register the hook
-	 * with WordPress.
+	 * plugins_loaded hook tagab, et tõlked laetakse pärast kõigi pluginate
+	 * laadimist, mis on WordPressi soovituslik viis i18n häälestamiseks.
 	 *
 	 * @since    1.0.0
 	 * @access   private
@@ -181,8 +194,10 @@ class Smart_Wp_Integrations {
 	}
 
 	/**
-	 * Register all of the hooks related to the admin area functionality
-	 * of the plugin.
+	 * Registreerib admin-ala hookid (CSS, JS) loader-i kaudu.
+	 *
+	 * Admin klassile antakse plugin_name ja version, mida kasutatakse
+	 * enqueue funktsioonides CSS/JS failide identifitseerimiseks ja versioonimiseks.
 	 *
 	 * @since    1.0.0
 	 * @access   private
@@ -197,8 +212,10 @@ class Smart_Wp_Integrations {
 	}
 
 	/**
-	 * Register all of the hooks related to the public-facing functionality
-	 * of the plugin.
+	 * Registreerib avaliku osa hookid (CSS, JS) loader-i kaudu.
+	 *
+	 * Avaliku osa skriptid laaditakse igal lehel — vajalik kui plugin
+	 * peab ka frontend-is midagi tegema (nt checkout integratsioonid).
 	 *
 	 * @since    1.0.0
 	 * @access   private
@@ -213,42 +230,46 @@ class Smart_Wp_Integrations {
 	}
 
 	/**
-	 * Run the loader to execute all of the hooks with WordPress.
+	 * Käivitab loader-i, mis registreerib kõik kogutud hookid WordPressiga.
+	 *
+	 * Pärast seda hetkest on kõik add_action() ja add_filter() kutsed tehtud
+	 * ja plugin on täielikult töövalmis.
 	 *
 	 * @since    1.0.0
 	 */
 	public function run() {
 		$this->loader->run();
-		
-		
+
+
 	}
 
 	/**
-	 * The name of the plugin used to uniquely identify it within the context of
-	 * WordPress and to define internationalization functionality.
+	 * Tagastab plugina unikaalse identifikaatori.
 	 *
 	 * @since     1.0.0
-	 * @return    string    The name of the plugin.
+	 * @return    string    Plugina nimi.
 	 */
 	public function get_plugin_name() {
 		return $this->plugin_name;
 	}
 
 	/**
-	 * The reference to the class that orchestrates the hooks with the plugin.
+	 * Tagastab viite loader objektile.
+	 *
+	 * Kasutatakse peamiselt testides, et kontrollida kas hookid on õigesti registreeritud.
 	 *
 	 * @since     1.0.0
-	 * @return    Smart_Wp_Integrations_Loader    Orchestrates the hooks of the plugin.
+	 * @return    Smart_Wp_Integrations_Loader    Hookide orchestrator.
 	 */
 	public function get_loader() {
 		return $this->loader;
 	}
 
 	/**
-	 * Retrieve the version number of the plugin.
+	 * Tagastab plugina praeguse versiooni.
 	 *
 	 * @since     1.0.0
-	 * @return    string    The version number of the plugin.
+	 * @return    string    Versioonumber SemVer formaadis, nt '1.0.0'.
 	 */
 	public function get_version() {
 		return $this->version;

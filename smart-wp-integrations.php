@@ -15,7 +15,7 @@
  * @wordpress-plugin
  * Plugin Name:       Smart WP Intergrations
  * Plugin URI:        https://wp-liides.freelancermartin.ee
- * Description:       Smart WP Intergrations on loodud selleks, et muuta sinu veebipood sujuvaks, kiireks ja automaatseks. See WordPressi pistikprogramm ühendab WooCommerce’i juhtivate tarneteenuste ja makselahendustega, võimaldades sul hallata kogu tellimustsüklit ühest kohast. Paigaldus on lihtne ja ei vaja tehnilisi oskusi – kõik vajalik töötab mõne minutiga. Kui klient teeb tellimuse, loob Muufi automaatselt vastava saadetise valitud teenusepakkuja süsteemis ning salvestab jälgimiskoodi tellimuse juurde. Samal ajal sünkroniseerib plugin makseinfo ja vajadusel ka arved raamatupidamistarkvaraga, muutes kogu protsessi kiiremaks ja usaldusväärsemaks.
+ * Description:       Smart WP Intergrations on loodud selleks, et muuta sinu veebipood sujuvaks, kiireks ja automaatseks. See WordPressi pistikprogramm ühendab WooCommerce'i juhtivate tarneteenuste ja makselahendustega, võimaldades sul hallata kogu tellimustsüklit ühest kohast. Paigaldus on lihtne ja ei vaja tehnilisi oskusi – kõik vajalik töötab mõne minutiga. Kui klient teeb tellimuse, loob Muufi automaatselt vastava saadetise valitud teenusepakkuja süsteemis ning salvestab jälgimiskoodi tellimuse juurde. Samal ajal sünkroniseerib plugin makseinfo ja vajadusel ka arved raamatupidamistarkvaraga, muutes kogu protsessi kiiremaks ja usaldusväärsemaks.
  * Version:           1.0.0
  * Author:            Freelancer Martin
  * Author URI:        https://freelancermartin.com/
@@ -25,7 +25,7 @@
  * Domain Path:       /languages
  */
 
-// If this file is called directly, abort.
+// Takistab faili otsest avamist veebibrauserist — WPINC on defineeritud ainult WordPressi laadimise käigus.
 if ( ! defined( 'WPINC' ) ) {
 	die;
 }
@@ -58,19 +58,88 @@ function deactivate_smart_wp_integrations() {
 register_activation_hook( __FILE__, 'activate_smart_wp_integrations' );
 register_deactivation_hook( __FILE__, 'deactivate_smart_wp_integrations' );
 
-// Feature 3: Automaatne uuesti saatmine — cron registreerimine
+/**
+ * Lisa kohandatud 10-minutiline cron intervall WordPress'i cron-süsteemi.
+ *
+ * WordPress ei tunne vaikimisi 10-minutist intervalli — see filter lisab selle,
+ * et swi_retry_failed_orders cron saaks iga 10 min tagant käivituda.
+ * isset-kontroll takistab topelt lisamist, kui teised pluginad sama nime kasutavad.
+ */
+add_filter( 'cron_schedules', function ( array $schedules ): array {
+	if ( ! isset( $schedules['swi_every_10min'] ) ) {
+		$schedules['swi_every_10min'] = [
+			'interval' => 600,
+			'display'  => 'Iga 10 minuti järel (Smart WP Integrations)',
+		];
+	}
+	return $schedules;
+} );
+
+/**
+ * Registreeri retry cron-ülesanne plugina aktiveerimisel.
+ *
+ * wp_next_scheduled kontroll väldib duplikaatide tekkimist, kui plugin
+ * deaktiveeritakse ja uuesti aktiveeritakse ilma WP cron-tabeli puhastamiseta.
+ */
 register_activation_hook( __FILE__, function () {
 	if ( ! wp_next_scheduled( 'swi_retry_failed_orders' ) ) {
-		wp_schedule_event( time(), 'hourly', 'swi_retry_failed_orders' );
+		wp_schedule_event( time(), 'swi_every_10min', 'swi_retry_failed_orders' );
 	}
 } );
+
+/**
+ * Tühjenda cron-ülesanne plugina desaktiveerimisel.
+ *
+ * Ilma selleta jääks cron aktiivseks ka pärast plugina keelustamist,
+ * mis põhjustaks PHP-vigu puuduvate klasside tõttu.
+ */
 register_deactivation_hook( __FILE__, function () {
 	wp_clear_scheduled_hook( 'swi_retry_failed_orders' );
 } );
 
+/**
+ * Parandab cron intervalli käituse ajal, kui vana intervall ei ole 600 sekundit.
+ *
+ * Kui plugin uuendati (nt vana versioon kasutas 'hourly'), siis selle koodiga
+ * asendatakse vale intervall automaatselt õigega ilma käsitsi sekkumata.
+ * _get_cron_array() annab juurdepääsu WP cron-tabelile kõigi registreeritud ülesannetega.
+ */
+add_action( 'admin_init', function () {
+	$next = wp_next_scheduled( 'swi_retry_failed_orders' );
+	if ( $next ) {
+		$crons    = _get_cron_array();
+		$interval = 0;
+		// Otsi konkreetse ülesande tegelik intervall cron-tabelist
+		foreach ( $crons as $timestamp => $jobs ) {
+			if ( isset( $jobs['swi_retry_failed_orders'] ) ) {
+				foreach ( $jobs['swi_retry_failed_orders'] as $job ) {
+					$interval = $job['interval'] ?? 0;
+				}
+			}
+		}
+		// Kui intervall ei ole 600 sekundit, ajakohasta
+		if ( $interval !== 600 ) {
+			wp_clear_scheduled_hook( 'swi_retry_failed_orders' );
+			wp_schedule_event( time(), 'swi_every_10min', 'swi_retry_failed_orders' );
+		}
+	} else {
+		// Cron pole üldse ajastatud — lisa see (juhtub nt pärast WP cron-tabeli lähtestamist)
+		wp_schedule_event( time(), 'swi_every_10min', 'swi_retry_failed_orders' );
+	}
+} );
+
+// Seo cron-sündmus konkreetse callback-funktsiooniga
 add_action( 'swi_retry_failed_orders', 'swi_do_retry_failed_orders' );
 
-// Ühekorraline HPOS migratsioon: kopeeri _swi_* meta wp_postmeta → wp_wc_orders_meta
+/**
+ * Ühekorraline HPOS migratsioon: kopeeri _swi_* meta wp_postmeta → wp_wc_orders_meta.
+ *
+ * WooCommerce HPOS (High Performance Order Storage) viis order-meta vana wp_postmeta
+ * tabelist uude wp_wc_orders_meta tabelisse. Ilma selle migratsioonita kaoks kõik
+ * varem saadetud orderite '_swi_sent_merit' lipud ja plugin saadaks need uuesti.
+ * ON DUPLICATE KEY UPDATE tagab, et olemasolevaid kirjeid ei kirjutata üle.
+ * swi_hpos_meta_migrated flag väldib, et migratsioon töötaks igal lehelaadimisел.
+ */
 add_action( 'admin_init', function () {
 	if ( get_option( 'swi_hpos_meta_migrated' ) ) {
 		return;
@@ -88,9 +157,17 @@ add_action( 'admin_init', function () {
 } );
 
 /**
- * Cron callback: saada uuesti ebaõnnestunud orderid (max 3 katset).
+ * Cron callback: proovi ebaõnnestunud ordereid automaatselt uuesti saata.
+ *
+ * Käivitub iga 10 minuti järel. Otsib ordereid, millel on '_swi_merit_retry' = '1'
+ * ja proovib neid kuni 3 korda uuesti saata. Pärast 3 ebaõnnestumist eemaldatakse
+ * retry-lipud ja admin peab probleemi käsitsi lahendama.
+ *
+ * Cron töötab ilma admin-kontekstita (eraldi PHP protsess), seega kontrollitakse
+ * klasside olemasolu enne kasutamist.
  */
 function swi_do_retry_failed_orders(): void {
+	// Ära tee midagi kui integratsioon on administraatori poolt keelatud
 	if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
 		return;
 	}
@@ -117,7 +194,7 @@ function swi_do_retry_failed_orders(): void {
 			continue;
 		}
 
-		// Ära saada kui juba saadetud
+		// Ära saada kui order on vahepeal (nt käsitsi) edukalt saadetud
 		if ( $order->get_meta( '_swi_sent_merit' ) ) {
 			$order->delete_meta_data( '_swi_merit_retry' );
 			$order->delete_meta_data( '_swi_merit_retry_count' );
@@ -125,7 +202,7 @@ function swi_do_retry_failed_orders(): void {
 			continue;
 		}
 
-		// Vaja include et klassid oleksid saadaval (cron töötab ilma admin kontekstita)
+		// Cron töötab eraldi protsessis ilma admin-laadimiseta, seega klassid ei pruugi saadaval olla
 		if ( ! class_exists( 'My_Simple_Ajax_Plugin' ) || ! class_exists( 'LocalApiClient' ) ) {
 			continue;
 		}
@@ -139,6 +216,7 @@ function swi_do_retry_failed_orders(): void {
 		$res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
 
 		if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+			// Edukas saatmine — märgi saadetuna ja puhasta retry-lipud
 			$order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
 			$order->delete_meta_data( '_swi_merit_retry' );
 			$order->delete_meta_data( '_swi_merit_retry_count' );
@@ -150,7 +228,8 @@ function swi_do_retry_failed_orders(): void {
 		} else {
 			$msg = function_exists( 'swi_humanize_merit_error' ) ? swi_humanize_merit_error( $res ) : ( $res['message'] ?? wp_json_encode( $res ) );
 
-			// "Korduv arve number" — arve on Meriti juba olemas, märgi saadetuna
+			// Erijuhtum: Merit ütleb "Korduv arve number" — tähendab arve on seal juba olemas.
+			// Sel juhul pole uuesti saatmine mõttekas, märgime orderit saadetuna.
 			$merit_body = $res['response']['result']['merit_message'] ?? $res['response']['result']['body'] ?? '';
 			if ( str_contains( $merit_body, 'Korduv arve number' ) || str_contains( $msg, 'Korduv arve number' ) || str_contains( $msg, 'juba olemas' ) ) {
 				$order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
@@ -161,6 +240,7 @@ function swi_do_retry_failed_orders(): void {
 				continue;
 			}
 
+			// Ebaõnnestunud katse — suurenda loendajat ja proovi järgmisel cron-käivitusel uuesti
 			$order->update_meta_data( '_swi_merit_retry_count', $count + 1 );
 			$order->save();
 			$order->add_order_note( 'Merit Aktiva: automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ') — ' . $msg );
@@ -190,7 +270,7 @@ function run_smart_wp_integrations() {
 
 	$plugin = new Smart_Wp_Integrations();
 	$plugin->run();
-	
+
 
 }
 run_smart_wp_integrations();
