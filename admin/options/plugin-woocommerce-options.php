@@ -60,7 +60,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'smart_wp_integtaion_crypto_text',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_merit_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_merit' ],
-                [ 'name' => 'Luba Merit Aktiva',          'type' => 'checkbox', 'id' => 'smart_wp_integtaion_enable',         'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'smart_wp_integtaion_arve_eesliides', 'default' => 'WP' ],
                 [ 'name' => 'Maksetähtaeg (päevades)',    'type' => 'text',     'id' => 'smart_wp_integtaion_maksetahtaeg',   'default' => '14' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'smart_wp_integtaion_invoice_status', 'options' => $s, 'default' => 'wc-completed' ],
@@ -85,7 +84,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_simplebooks_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sb_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sb' ],
-                [ 'name' => 'Luba Simplebooks',           'type' => 'checkbox', 'id' => 'swi_simplebooks_enable',       'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_simplebooks_prefix',       'default' => 'SB' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_simplebooks_order_status', 'options' => $s, 'default' => 'wc-completed' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sb' ],
@@ -99,7 +97,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_smartaccounts_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sa_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sa' ],
-                [ 'name' => 'Luba Smart Accounts',        'type' => 'checkbox', 'id' => 'swi_smartaccounts_enable',       'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_smartaccounts_prefix',       'default' => 'SA' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_smartaccounts_order_status', 'options' => $s, 'default' => 'wc-completed' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sa' ],
@@ -350,7 +347,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
                             <div class="swi-section-title">Merit Aktiva – Üldseaded</div>
                             <div class="swi-section-desc">Merit Aktiva API võtmed (API ID + API Key) seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Merit Aktiva</em>.</div>
-                            <div class="swi-card"><?php woocommerce_admin_fields($merit_s); ?></div>
+                            <div class="swi-card">
+                                <?php $this->render_toggle('smart_wp_integtaion_enable', 'Luba Merit Aktiva', $merit_on); ?>
+                                <?php woocommerce_admin_fields($merit_s); ?>
+                            </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-countries">
                             <div class="swi-section-title">Merit Aktiva – Riigi VAT seadistused</div>
@@ -398,7 +398,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
                             <div class="swi-section-title">Simplebooks – Üldseaded</div>
                             <div class="swi-section-desc">Simplebooks API võti seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Simplebooks</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:860px;"><?php woocommerce_admin_fields($sb_s); ?></div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <?php $this->render_toggle('swi_simplebooks_enable', 'Luba Simplebooks', $sb_on); ?>
+                                <?php woocommerce_admin_fields($sb_s); ?>
+                            </div>
                             <div class="swi-alert info">ℹ <div>Simplebooks ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Simplebooks API võti lisatud.</div></div>
                         </div>
                     </div>
@@ -427,7 +430,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
                             <div class="swi-section-title">Smart Accounts – Üldseaded</div>
                             <div class="swi-section-desc">Smart Accounts Client ID ja Secret seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:860px;"><?php woocommerce_admin_fields($sa_s); ?></div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <?php $this->render_toggle('swi_smartaccounts_enable', 'Luba Smart Accounts', $sa_on); ?>
+                                <?php woocommerce_admin_fields($sa_s); ?>
+                            </div>
                             <div class="swi-alert info">ℹ <div>Smart Accounts ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Smart Accounts API seadistused lisatud.</div></div>
                         </div>
                     </div>
@@ -452,25 +458,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 var panel = document.getElementById('swi-panel-' + key);
                 if (panel) panel.classList.add('active');
             }
-            document.addEventListener('DOMContentLoaded', function(){
-                ['smart_wp_integtaion_enable','swi_simplebooks_enable','swi_smartaccounts_enable'].forEach(function(id){
-                    var cb = document.getElementById(id);
-                    if (!cb) return;
-                    cb.style.display = 'none';
-                    var wrap  = document.createElement('div'); wrap.className = 'swi-toggle-wrap';
-                    var track = document.createElement('div'); track.className = 'swi-toggle-track' + (cb.checked?' on':'');
-                    track.innerHTML = '<div class="swi-toggle-thumb"></div>';
-                    var lbl = document.createElement('span'); lbl.className = 'swi-toggle-label';
-                    lbl.textContent = cb.checked ? 'Lubatud' : 'Keelatud';
-                    track.onclick = function(){
-                        cb.checked = !cb.checked;
-                        track.classList.toggle('on', cb.checked);
-                        lbl.textContent = cb.checked ? 'Lubatud' : 'Keelatud';
-                    };
-                    wrap.appendChild(track); wrap.appendChild(lbl);
-                    cb.parentElement.insertBefore(wrap, cb);
-                });
-            });
+            function swiToggle(id) {
+                var h = document.getElementById('swi_h_' + id);
+                var t = document.getElementById('swi_t_' + id);
+                var l = document.getElementById('swi_l_' + id);
+                var on = h.value !== 'yes';
+                h.value = on ? 'yes' : 'no';
+                t.classList.toggle('on', on);
+                l.textContent = on ? 'Lubatud' : 'Keelatud';
+            }
             </script>
             <?php
         }
@@ -533,6 +529,26 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 } );
                 update_option( $key, $clean, false );
             }
+        }
+
+        private function render_toggle( string $name, string $label, bool $on ): void {
+            $id = esc_attr( $name );
+            ?>
+            <table class="form-table" style="margin-bottom:4px;">
+                <tr>
+                    <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;"><?php echo esc_html($label); ?></th>
+                    <td style="padding:8px 0;">
+                        <input type="hidden" name="<?php echo $id; ?>" id="swi_h_<?php echo $id; ?>" value="<?php echo $on ? 'yes' : 'no'; ?>">
+                        <div class="swi-toggle-wrap" onclick="swiToggle('<?php echo $id; ?>')" style="cursor:pointer;">
+                            <div id="swi_t_<?php echo $id; ?>" class="swi-toggle-track<?php echo $on ? ' on' : ''; ?>">
+                                <div class="swi-toggle-thumb"></div>
+                            </div>
+                            <span id="swi_l_<?php echo $id; ?>" class="swi-toggle-label"><?php echo $on ? 'Lubatud' : 'Keelatud'; ?></span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+            <?php
         }
 
         private function deep_sanitize( $arr ): array {
