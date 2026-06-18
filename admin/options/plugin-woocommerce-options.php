@@ -434,24 +434,42 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-title">Merit Aktiva – Osakonnad</div>
                             <div class="swi-section-desc">Seo WooCommerce tootekategooriad Merit Aktiva osakondadega.</div>
                             <?php
-                            $client2   = new MeritServersDataClient();
-                            $depts2    = [];
-                            try { $depts2 = (array) $client2->getDepartments(); } catch (\Exception $e) {}
+                            $client2      = new MeritServersDataClient();
+                            $depts2       = [];
+                            $dept_api_err = '';
+                            try { $depts2 = (array) $client2->getDepartments(); } catch (\Exception $e) { $dept_api_err = $e->getMessage(); }
                             $saved_dept = get_option('smart_wp_integtaion_deparment', '');
                             if ($saved_dept && !in_array($saved_dept, $depts2, true)) $depts2[] = $saved_dept;
-                            $dopts2 = ['' => '— vali osakond —'];
-                            foreach ($depts2 as $dc) { $dopts2[$dc] = $dc; }
                             ?>
                             <div class="swi-card" style="max-width:860px;">
-                                <table class="form-table" style="margin-bottom:16px;">
+                                <?php if (empty($depts2) && !$dept_api_err) : ?>
+                                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400e;">
+                                    Merit Aktivas pole ühtegi osakonda loodud. Osakondi saad luua Merit Aktiva veebikeskkonnas: <strong>Seaded → Osakonnad</strong>. Sisesta osakonna kood käsitsi allpool.
+                                </div>
+                                <?php elseif ($dept_api_err) : ?>
+                                <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#991b1b;">
+                                    Merit API ei vastanud: <?php echo esc_html($dept_api_err); ?>
+                                </div>
+                                <?php endif; ?>
+                                <table class="form-table" style="margin-bottom:0;">
                                     <tr>
                                         <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;">Vaikimisi osakond</th>
                                         <td style="padding:8px 0;">
+                                            <?php if (!empty($depts2)) : ?>
                                             <select name="smart_wp_integtaion_deparment" style="min-width:300px;">
-                                                <?php foreach ($dopts2 as $dv => $dl) : ?>
-                                                <option value="<?php echo esc_attr($dv); ?>" <?php selected($saved_dept, $dv); ?>><?php echo esc_html($dl); ?></option>
+                                                <option value="">— kasuta vaikimisi (tühi) —</option>
+                                                <?php foreach ($depts2 as $dc) : ?>
+                                                <option value="<?php echo esc_attr($dc); ?>" <?php selected($saved_dept, $dc); ?>><?php echo esc_html($dc); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <?php else : ?>
+                                            <input type="text" name="smart_wp_integtaion_deparment"
+                                                value="<?php echo esc_attr($saved_dept); ?>"
+                                                placeholder="nt. MYYK"
+                                                style="min-width:300px;"
+                                                class="regular-text">
+                                            <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">Sisesta osakonna kood täpselt nii nagu see Merit Aktivas on (tõstutundlik).</p>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 </table>
@@ -481,12 +499,16 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             </select>
                                         </td>
                                         <td>
+                                            <?php if (!empty($depts2)) : ?>
                                             <select name="swi_dept_map_dept[]" style="width:100%;">
                                                 <option value="">— kasuta vaikimisi —</option>
                                                 <?php foreach ($depts2 as $dc) : ?>
                                                 <option value="<?php echo esc_attr($dc); ?>" <?php selected($dept_val, $dc); ?>><?php echo esc_html($dc); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <?php else : ?>
+                                            <input type="text" name="swi_dept_map_dept[]" value="<?php echo esc_attr($dept_val); ?>" placeholder="nt. MYYK" style="width:100%;">
+                                            <?php endif; ?>
                                         </td>
                                         <td><button type="button" onclick="this.closest('tr').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px;" title="Kustuta">✕</button></td>
                                     </tr>
@@ -502,10 +524,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     var cats = <?php echo wp_json_encode(!is_wp_error($categories) ? array_map(function($c){ return ['slug'=>$c->slug,'name'=>$c->name]; }, $categories) : []); ?>;
                                     var depts = <?php echo wp_json_encode(array_values($depts2)); ?>;
                                     var catOpts = '<option value="">— kategooria —</option>' + cats.map(function(c){ return '<option value="'+c.slug+'">'+c.name+'</option>'; }).join('');
-                                    var deptOpts = '<option value="">— kasuta vaikimisi —</option>' + depts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
+                                    var deptCell = depts.length
+                                        ? '<select name="swi_dept_map_dept[]" style="width:100%;"><option value="">— kasuta vaikimisi —</option>' + depts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('') + '</select>'
+                                        : '<input type="text" name="swi_dept_map_dept[]" placeholder="nt. MYYK" style="width:100%;">';
                                     var tr = document.createElement('tr');
                                     tr.innerHTML = '<td><select name="swi_dept_map_cat[]" style="width:100%;">'+catOpts+'</select></td>'
-                                        + '<td><select name="swi_dept_map_dept[]" style="width:100%;">'+deptOpts+'</select></td>'
+                                        + '<td>' + deptCell + '</td>'
                                         + '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px;">✕</button></td>';
                                     tbody.appendChild(tr);
                                 });
