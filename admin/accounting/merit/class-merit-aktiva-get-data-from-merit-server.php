@@ -66,4 +66,14 @@ class MeritServersDataClient {
         // Kui vaja, lisa POST /api/merit/send-invoice-email endpoint.
         throw new RuntimeException( 'merit_send_invoice_by_email pole veel proxy kaudu implementeeritud.' );
     }
+
+    /**
+     * Tagastab Merit Aktiva maksumäärad (VAT koodid) läbi vaheserveri.
+     *
+     * @return array Iga kirje: ['Code' => ..., 'Name' => ..., 'Rate' => ...]
+     */
+    public function get_vatcodes(): array {
+        $data = $this->call( 'merit/vatcodes' );
+        return $data['vatcodes'] ?? [];
+    }
 }

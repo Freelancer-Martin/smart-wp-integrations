@@ -20,6 +20,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             add_action( 'woocommerce_admin_field_swi_payment_map',  [ $this, 'field_payment_map' ] );
             add_action( 'woocommerce_admin_field_swi_tax_map',      [ $this, 'field_tax_map' ] );
             add_action( 'woocommerce_admin_field_swi_shipping_map', [ $this, 'field_shipping_map' ] );
+            // Feature 5: Seadistuste eksport/import
+            add_action( 'wp_ajax_swi_export_settings', [ $this, 'handle_export_settings' ] );
+            add_action( 'wp_ajax_swi_import_settings', [ $this, 'handle_import_settings' ] );
         }
 
         public function get_settings( $section = '' ): array {
@@ -319,11 +322,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-sidebar-label">Merit Aktiva</div>
                         <?php
                         $merit_nav = [
-                            ['key'=>'merit-general',   'icon'=>'⚙',  'label'=>'Üldseaded'],
-                            ['key'=>'merit-countries', 'icon'=>'🌍', 'label'=>'Riigid'],
-                            ['key'=>'merit-payments',  'icon'=>'💳', 'label'=>'Maksed'],
-                            ['key'=>'merit-taxes',     'icon'=>'📋', 'label'=>'Maksud'],
-                            ['key'=>'merit-shipping',  'icon'=>'🚚', 'label'=>'Tarne'],
+                            ['key'=>'merit-general',     'icon'=>'⚙',  'label'=>'Üldseaded'],
+                            ['key'=>'merit-countries',   'icon'=>'🌍', 'label'=>'Riigid'],
+                            ['key'=>'merit-payments',    'icon'=>'💳', 'label'=>'Maksed'],
+                            ['key'=>'merit-taxes',       'icon'=>'📋', 'label'=>'Maksud'],
+                            ['key'=>'merit-shipping',    'icon'=>'🚚', 'label'=>'Tarne'],
+                            ['key'=>'merit-departments', 'icon'=>'🏢', 'label'=>'Osakonnad'],
+                            ['key'=>'merit-tools',       'icon'=>'🔧', 'label'=>'Tööriistad'],
                         ];
                         foreach ($merit_nav as $i => $item) : ?>
                         <div class="swi-nav-item <?php echo $i===0?'active':''; ?>"
@@ -342,6 +347,29 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php if ($this->proxy_error) : ?>
                             <div class="swi-alert err">⚠ <div><strong>Vaheserver ei ole kättesaadav.</strong><br><?php echo esc_html($this->proxy_error); ?></div></div>
                             <?php endif; ?>
+                            <?php
+                            // Feature 8: Setup wizard banner
+                            $is_configured = !empty(get_option('smart_wp_integtaion_license_text')) && !empty(get_option('smart_wp_integtaion_crypto_text'));
+                            if (!$is_configured) : ?>
+                            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;margin-bottom:24px;">
+                                <h3 style="margin:0 0 8px;color:#1e40af;">👋 Tere tulemast Smart WP Integrations!</h3>
+                                <p style="margin:0 0 12px;color:#1e3a8a;">Alustamiseks täida 3 sammu:</p>
+                                <ol style="margin:0;color:#1e3a8a;padding-left:20px;">
+                                    <li>Kopeeri <strong>Litsentsi võti</strong> ja <strong>Krüptovõti</strong> Laravel rakendusest</li>
+                                    <li>Seadista <strong>Merit API võtmed</strong> Laravel rakenduses: Litsentsid → Seadista → Merit Aktiva</li>
+                                    <li>Vajuta <strong>Salvesta seaded</strong></li>
+                                </ol>
+                            </div>
+                            <?php endif; ?>
+                            <?php
+                            // Feature 2: Integratsiooni staatuse riba
+                            $server_ok = class_exists('LocalApiClient') && LocalApiClient::pingServer() === null;
+                            $last_send = get_option('swi_last_successful_send', '');
+                            ?>
+                            <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+                                <span style="padding:4px 12px;border-radius:20px;font-size:12px;background:<?php echo $server_ok ? '#16a34a' : '#ef4444'; ?>;color:#fff;">● Server: <?php echo $server_ok ? 'OK' : 'Viga'; ?></span>
+                                <span style="padding:4px 12px;border-radius:20px;font-size:12px;background:#e5e7eb;color:#374151;">Viimane saatmine: <?php echo $last_send ? esc_html($last_send) : '—'; ?></span>
+                            </div>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
                             <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
@@ -351,6 +379,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-desc">Merit Aktiva API võtmed (API ID + API Key) seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Merit Aktiva</em>.</div>
                             <div class="swi-card">
                                 <?php $this->render_toggle('smart_wp_integtaion_enable', 'Luba Merit Aktiva', $merit_on); ?>
+                                <?php
+                                // Feature 4: E-mail teavitus toggle
+                                $email_notify_on = get_option('swi_merit_email_notify') === 'yes';
+                                $this->render_toggle('swi_merit_email_notify', 'E-mail teavitus ebaõnnestumisel', $email_notify_on);
+                                ?>
                                 <?php woocommerce_admin_fields($merit_s); ?>
                             </div>
                             <div class="swi-section-title" style="margin-top:24px;">Sünkroniseerimine</div>
@@ -359,6 +392,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <button type="button" id="swi-sync-btn" class="button button-secondary">Kontrolli sünkroniseerimist</button>
                                 <span id="swi-sync-spinner" style="display:none;margin-left:10px;">Laen...</span>
                                 <div id="swi-sync-result" style="margin-top:16px;"></div>
+                            </div>
+                            <?php // Feature 6: Arve eelvaade ?>
+                            <div class="swi-section-title" style="margin-top:24px;">Arve eelvaade</div>
+                            <div class="swi-section-desc">Kontrolli mis andmed Meriti lähevad enne päris saatmist.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <input type="number" id="swi-preview-order-id" placeholder="Tellimuse ID (nt 34)" style="width:160px;margin-right:8px;">
+                                <button type="button" id="swi-preview-btn" class="button button-secondary">Näita JSON</button>
+                                <pre id="swi-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
                             </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-countries">
@@ -374,12 +415,163 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-merit-taxes">
                             <div class="swi-section-title">Merit Aktiva – Maksude kaardistus</div>
                             <div class="swi-section-desc">Seo WooCommerce maksumäärad Merit Aktiva maksu ID-dega.</div>
-                            <div class="swi-card"><?php $this->field_tax_map(['id'=>$this->opt_tax_map]); ?></div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 12px;">
+                                    <button type="button" id="swi-load-vatcodes-btn" class="button button-secondary">Lae Merit maksumäärad</button>
+                                    <span id="swi-vatcodes-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
+                                </p>
+                                <?php $this->field_tax_map(['id'=>$this->opt_tax_map]); ?>
+                            </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-shipping">
                             <div class="swi-section-title">Merit Aktiva – Tarnemeetodite kaardistus</div>
                             <div class="swi-section-desc">Seo tarne-teenused Merit Aktiva artikli koodidega.</div>
                             <div class="swi-card"><?php $this->field_shipping_map(['id'=>$this->opt_shipping_map]); ?></div>
+                        </div>
+
+                        <?php // Feature 9: Osakonnad paneel ?>
+                        <div class="swi-panel" id="swi-panel-merit-departments">
+                            <div class="swi-section-title">Merit Aktiva – Osakonnad</div>
+                            <div class="swi-section-desc">Seo WooCommerce tootekategooriad Merit Aktiva osakondadega.</div>
+                            <?php
+                            $client2   = new MeritServersDataClient();
+                            $depts2    = [];
+                            try { $depts2 = (array) $client2->getDepartments(); } catch (\Exception $e) {}
+                            $saved_dept = get_option('smart_wp_integtaion_deparment', '');
+                            if ($saved_dept && !in_array($saved_dept, $depts2, true)) $depts2[] = $saved_dept;
+                            $dopts2 = ['' => '— vali osakond —'];
+                            foreach ($depts2 as $dc) { $dopts2[$dc] = $dc; }
+                            ?>
+                            <div class="swi-card" style="max-width:860px;">
+                                <table class="form-table" style="margin-bottom:16px;">
+                                    <tr>
+                                        <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;">Vaikimisi osakond</th>
+                                        <td style="padding:8px 0;">
+                                            <select name="smart_wp_integtaion_deparment" style="min-width:300px;">
+                                                <?php foreach ($dopts2 as $dv => $dl) : ?>
+                                                <option value="<?php echo esc_attr($dv); ?>" <?php selected($saved_dept, $dv); ?>><?php echo esc_html($dl); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <?php
+                            $categories = get_terms(['taxonomy' => 'product_cat', 'hide_empty' => false]);
+                            $dept_map_saved = (array) get_option('swi_category_dept_map', []);
+                            ?>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:12.5px;">Kategooria → Osakond kaardistus</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kui toote kategooria leitakse siit tabelist, kasutatakse vastavat osakonda (eirab vaikimisi osakondi).</p>
+                                <table class="widefat" id="swi-dept-map-table">
+                                    <thead><tr>
+                                        <th>Kategooria</th>
+                                        <th>Osakond</th>
+                                        <th style="width:40px;"></th>
+                                    </tr></thead>
+                                    <tbody>
+                                    <?php if (!empty($dept_map_saved)) : foreach ($dept_map_saved as $cat_slug => $dept_val) : ?>
+                                    <tr>
+                                        <td>
+                                            <select name="swi_category_dept_map[<?php echo esc_attr($cat_slug); ?>]" style="width:100%;">
+                                                <option value="">— kategooria —</option>
+                                                <?php if (!is_wp_error($categories)) foreach ($categories as $cat) : ?>
+                                                <option value="<?php echo esc_attr($cat->slug); ?>" <?php selected($cat_slug, $cat->slug); ?>><?php echo esc_html($cat->name); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select name="swi_category_dept_map[<?php echo esc_attr($cat_slug); ?>]" style="width:100%;">
+                                                <option value="">— kasuta vaikimisi —</option>
+                                                <?php foreach ($depts2 as $dc) : ?>
+                                                <option value="<?php echo esc_attr($dc); ?>" <?php selected($dept_val, $dc); ?>><?php echo esc_html($dc); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td><button type="button" onclick="this.closest('tr').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px;" title="Kustuta">✕</button></td>
+                                    </tr>
+                                    <?php endforeach; endif; ?>
+                                    </tbody>
+                                </table>
+                                <p style="margin-top:12px;">
+                                    <button type="button" id="swi-add-dept-row" class="button button-secondary">+ Lisa rida</button>
+                                </p>
+                                <script>
+                                document.getElementById('swi-add-dept-row') && document.getElementById('swi-add-dept-row').addEventListener('click', function() {
+                                    var uid = 'new_' + Date.now();
+                                    var tbody = document.querySelector('#swi-dept-map-table tbody');
+                                    var cats = <?php echo wp_json_encode(!is_wp_error($categories) ? array_map(function($c){ return ['slug'=>$c->slug,'name'=>$c->name]; }, $categories) : []); ?>;
+                                    var depts = <?php echo wp_json_encode($depts2); ?>;
+                                    var catOpts = '<option value="">— kategooria —</option>' + cats.map(function(c){ return '<option value="'+c.slug+'">'+c.name+'</option>'; }).join('');
+                                    var deptOpts = '<option value="">— kasuta vaikimisi —</option>' + depts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
+                                    var tr = document.createElement('tr');
+                                    tr.innerHTML = '<td><select name="swi_category_dept_map['+uid+']" style="width:100%;">'+catOpts+'</select></td>'
+                                        + '<td><select name="swi_category_dept_map['+uid+']" style="width:100%;">'+deptOpts+'</select></td>'
+                                        + '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px;">✕</button></td>';
+                                    tbody.appendChild(tr);
+                                });
+                                </script>
+                            </div>
+                        </div>
+
+                        <?php
+                        // Feature 5 + 7: Tööriistad paneel
+                        $history = (array) get_option('swi_send_history', []);
+                        ?>
+                        <div class="swi-panel" id="swi-panel-merit-tools">
+                            <div class="swi-section-title">Tööriistad</div>
+                            <div class="swi-section-desc">Seadistuste eksport/import ning saatmise ajalugu.</div>
+
+                            <?php // Feature 5: Eksport ?>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Seadistuste eksport</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Lae alla kõik seadistused JSON failina.</p>
+                                <button type="button" id="swi-export-btn" class="button button-secondary">Ekspordi seaded</button>
+                            </div>
+
+                            <?php // Feature 5: Import ?>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Seadistuste import</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Lae üles eelnevalt eksporditud JSON fail.</p>
+                                <input type="file" id="swi-import-file" accept=".json" style="margin-right:8px;">
+                                <button type="button" id="swi-import-btn" class="button button-secondary">Impordi seaded</button>
+                                <span id="swi-import-status" style="margin-left:10px;font-size:12px;"></span>
+                            </div>
+
+                            <?php // Feature 7: Saatmise ajalugu ?>
+                            <div class="swi-section-title" style="margin-top:24px;">Saatmise ajalugu</div>
+                            <div class="swi-section-desc">Viimased 50 saatmiskatset.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <?php if (empty($history)) : ?>
+                                <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
+                                <?php else : ?>
+                                <p style="margin:0 0 12px;">
+                                    <button type="button" id="swi-clear-history-btn" class="button button-small" style="color:#b32d2e;">Tühista ajalugu</button>
+                                </p>
+                                <table class="widefat striped">
+                                    <thead><tr>
+                                        <th>Aeg</th>
+                                        <th>Tellimus</th>
+                                        <th>Staatus</th>
+                                        <th>Sõnum</th>
+                                    </tr></thead>
+                                    <tbody>
+                                    <?php foreach ($history as $entry) :
+                                        $entry_status = $entry['status'] ?? '';
+                                        $color = $entry_status === 'ok' ? '#14532d' : '#991b1b';
+                                        $bg    = $entry_status === 'ok' ? '#dcfce7' : '#fee2e2';
+                                    ?>
+                                    <tr>
+                                        <td style="font-size:12px;"><?php echo esc_html($entry['time'] ?? ''); ?></td>
+                                        <td><a href="<?php echo esc_url(admin_url('post.php?post=' . intval($entry['order_id'] ?? 0) . '&action=edit')); ?>" target="_blank">#<?php echo intval($entry['order_id'] ?? 0); ?></a></td>
+                                        <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $color; ?>;"><?php echo esc_html($entry_status); ?></span></td>
+                                        <td style="font-size:12px;"><?php echo esc_html($entry['message'] ?? ''); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -565,6 +757,179 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 t.classList.toggle('on', on);
                 l.textContent = on ? 'Lubatud' : 'Keelatud';
             }
+
+            // Feature 1: Merit VAT koodide laadimine
+            document.addEventListener('DOMContentLoaded', function() {
+                var vatBtn = document.getElementById('swi-load-vatcodes-btn');
+                if (vatBtn) {
+                    vatBtn.addEventListener('click', function() {
+                        var spinner = document.getElementById('swi-vatcodes-spinner');
+                        vatBtn.disabled = true;
+                        if (spinner) spinner.style.display = 'inline';
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_merit_load_vatcodes',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            vatBtn.disabled = false;
+                            if (spinner) spinner.style.display = 'none';
+                            if (!resp.success) {
+                                swiNotify((resp.data && resp.data.error) ? resp.data.error : 'VAT koodide laadimine ebaõnnestus', 'error');
+                                return;
+                            }
+                            var vatcodes = resp.data.vatcodes;
+                            if (!vatcodes || vatcodes.length === 0) {
+                                swiNotify('Ühtegi VAT koodi ei leitud.', 'error');
+                                return;
+                            }
+                            // Lisa iga VAT koodi jaoks rida maksukaardistuse tabelisse
+                            var taxKey = '<?php echo esc_js($this->opt_tax_map); ?>';
+                            var tbody = document.querySelector('#swi-panel-merit-taxes table.widefat tbody');
+                            if (!tbody) { swiNotify('Maksude tabelit ei leitud.', 'error'); return; }
+                            vatcodes.forEach(function(vc) {
+                                if (!vc.Code && !vc.Rate) return;
+                                var uid = 'vat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                                var rate = vc.Rate !== undefined ? vc.Rate : '';
+                                var uuid = vc.Code || '';
+                                var tr = document.createElement('tr');
+                                tr.innerHTML =
+                                    '<td><input type="number" name="'+taxKey+'['+uid+'][rate]" value="'+rate+'" style="width:70px" min="0" max="100"></td>'
+                                    + '<td><input type="text" name="'+taxKey+'['+uid+'][uuid]" value="'+uuid+'" style="width:100%" placeholder="Merit UUID"></td>'
+                                    + '<td><select name="'+taxKey+'['+uid+'][is_default]"><option value="">Ei</option><option value="yes">Jah</option></select></td>'
+                                    + '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px" title="Kustuta">✕</button></td>';
+                                tbody.appendChild(tr);
+                            });
+                            swiNotify(vatcodes.length + ' VAT koodi lisatud tabelisse.', 'ok');
+                        }).fail(function() {
+                            vatBtn.disabled = false;
+                            if (spinner) spinner.style.display = 'none';
+                            swiNotify('Serveri viga VAT koodide laadimisel.', 'error');
+                        });
+                    });
+                }
+
+                // Feature 6: Arve eelvaade
+                var previewBtn = document.getElementById('swi-preview-btn');
+                if (previewBtn) {
+                    previewBtn.addEventListener('click', function() {
+                        var orderId = document.getElementById('swi-preview-order-id').value;
+                        var pre = document.getElementById('swi-preview-result');
+                        if (!orderId) { swiNotify('Sisesta tellimuse ID.', 'error'); return; }
+                        previewBtn.disabled = true;
+                        previewBtn.textContent = 'Laen...';
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_merit_preview_invoice',
+                            security: MyAjax.nonce,
+                            order_id: orderId
+                        }, function(resp) {
+                            previewBtn.disabled = false;
+                            previewBtn.textContent = 'Näita JSON';
+                            if (!resp.success) {
+                                swiNotify((resp.data && resp.data.error) ? resp.data.error : 'Eelvaade ebaõnnestus.', 'error');
+                                return;
+                            }
+                            pre.style.display = 'block';
+                            pre.textContent = JSON.stringify(resp.data.payload, null, 2);
+                        }).fail(function() {
+                            previewBtn.disabled = false;
+                            previewBtn.textContent = 'Näita JSON';
+                            swiNotify('Serveri viga eelvaate laadimisel.', 'error');
+                        });
+                    });
+                }
+
+                // Feature 5: Eksport
+                var exportBtn = document.getElementById('swi-export-btn');
+                if (exportBtn) {
+                    exportBtn.addEventListener('click', function() {
+                        exportBtn.disabled = true;
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_export_settings',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            exportBtn.disabled = false;
+                            if (!resp.success) {
+                                swiNotify((resp.data && resp.data.error) ? resp.data.error : 'Eksport ebaõnnestus.', 'error');
+                                return;
+                            }
+                            var blob = new Blob([resp.data.json], {type: 'application/json'});
+                            var url = URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url;
+                            a.download = resp.data.filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+                            swiNotify('Seaded eksporditud.', 'ok');
+                        }).fail(function() {
+                            exportBtn.disabled = false;
+                            swiNotify('Serveri viga ekspordil.', 'error');
+                        });
+                    });
+                }
+
+                // Feature 5: Import
+                var importBtn = document.getElementById('swi-import-btn');
+                if (importBtn) {
+                    importBtn.addEventListener('click', function() {
+                        var fileInput = document.getElementById('swi-import-file');
+                        var statusEl  = document.getElementById('swi-import-status');
+                        if (!fileInput.files || !fileInput.files[0]) {
+                            swiNotify('Vali esmalt JSON fail.', 'error');
+                            return;
+                        }
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            var json = e.target.result;
+                            importBtn.disabled = true;
+                            if (statusEl) statusEl.textContent = 'Impordin...';
+                            jQuery.post(ajaxurl, {
+                                action: 'swi_import_settings',
+                                security: MyAjax.nonce,
+                                json: json
+                            }, function(resp) {
+                                importBtn.disabled = false;
+                                if (resp.success) {
+                                    if (statusEl) statusEl.textContent = resp.data.message || 'Seaded imporditud.';
+                                    swiNotify('Seaded imporditud. Leht laetakse uuesti...', 'ok');
+                                    setTimeout(function(){ window.location.reload(); }, 2000);
+                                } else {
+                                    if (statusEl) statusEl.textContent = '';
+                                    swiNotify((resp.data && resp.data.error) ? resp.data.error : 'Import ebaõnnestus.', 'error');
+                                }
+                            }).fail(function() {
+                                importBtn.disabled = false;
+                                if (statusEl) statusEl.textContent = '';
+                                swiNotify('Serveri viga impordil.', 'error');
+                            });
+                        };
+                        reader.readAsText(fileInput.files[0]);
+                    });
+                }
+
+                // Feature 7: Kustuta ajalugu
+                var clearHistBtn = document.getElementById('swi-clear-history-btn');
+                if (clearHistBtn) {
+                    clearHistBtn.addEventListener('click', function() {
+                        if (!confirm('Kustuta kogu saatmise ajalugu?')) return;
+                        clearHistBtn.disabled = true;
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_clear_history',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            if (resp.success) {
+                                swiNotify('Ajalugu kustutatud.', 'ok');
+                                setTimeout(function(){ window.location.reload(); }, 1000);
+                            } else {
+                                clearHistBtn.disabled = false;
+                                swiNotify('Kustutamine ebaõnnestus.', 'error');
+                            }
+                        }).fail(function() {
+                            clearHistBtn.disabled = false;
+                            swiNotify('Serveri viga kustutamisel.', 'error');
+                        });
+                    });
+                }
+            });
             </script>
             <?php
         }
@@ -609,10 +974,25 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'smart_wp_integtaion_enable',
                 'swi_simplebooks_enable',
                 'swi_smartaccounts_enable',
+                'swi_merit_email_notify',
             ] as $field ) {
                 $val = sanitize_text_field( wp_unslash( $_POST[ $field ] ?? 'no' ) );
                 update_option( $field, $val === 'yes' ? 'yes' : 'no' );
             }
+
+            // Feature 9: Kategooria → osakond kaardistus
+            $dept_map_raw = isset($_POST['swi_category_dept_map']) ? (array)$_POST['swi_category_dept_map'] : [];
+            // The table uses same name for both columns; we need to handle paired values.
+            // Since the select elements share the same name, PHP receives an array; we store as-is after sanitizing.
+            $dept_map_clean = [];
+            foreach ($dept_map_raw as $k => $v) {
+                $clean_k = sanitize_text_field(wp_unslash((string)$k));
+                $clean_v = sanitize_text_field(wp_unslash((string)$v));
+                if ($clean_k !== '' && $clean_v !== '') {
+                    $dept_map_clean[$clean_k] = $clean_v;
+                }
+            }
+            update_option('swi_category_dept_map', $dept_map_clean, false);
 
             // Maps (country, payment, tax, shipping)
             foreach ( [
@@ -628,6 +1008,81 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 } );
                 update_option( $key, $clean, false );
             }
+        }
+
+        /* ─── FEATURE 5: EXPORT/IMPORT ─── */
+
+        /**
+         * Kõik plugina option keyd mida eksportida/importida.
+         */
+        private function all_option_keys(): array {
+            return [
+                'smart_wp_integtaion_license_text',
+                'smart_wp_integtaion_crypto_text',
+                'smart_wp_integtaion_arve_eesliides',
+                'smart_wp_integtaion_maksetahtaeg',
+                'smart_wp_integtaion_invoice_status',
+                'smart_wp_integtaion_maksumaar',
+                'smart_wp_integtaion_arve_ridade_tyyp',
+                'smart_wp_integtaion_deparment',
+                'smart_wp_integtaion_enable',
+                'smart_wp_integtaion_payment_map',
+                'smart_wp_integtaion_shipping_map',
+                'smart_wp_integtaion_tax_map',
+                'smart_wp_integtaion_country_map',
+                'swi_simplebooks_enable',
+                'swi_simplebooks_license_key',
+                'swi_simplebooks_crypto_key',
+                'swi_simplebooks_order_status',
+                'swi_simplebooks_prefix',
+                'swi_smartaccounts_enable',
+                'swi_smartaccounts_license_key',
+                'swi_smartaccounts_crypto_key',
+                'swi_smartaccounts_order_status',
+                'swi_smartaccounts_prefix',
+                'smart_wp_integration_server_url',
+                'regno',
+                'swi_merit_email_notify',
+                'swi_category_dept_map',
+            ];
+        }
+
+        public function handle_export_settings(): void {
+            check_ajax_referer( 'my_nonce', 'security' );
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+            }
+            $data = [];
+            foreach ( $this->all_option_keys() as $key ) {
+                $data[ $key ] = get_option( $key );
+            }
+            $json = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+            wp_send_json_success( [
+                'json'     => $json,
+                'filename' => 'swi-settings-' . gmdate( 'Y-m-d' ) . '.json',
+            ] );
+        }
+
+        public function handle_import_settings(): void {
+            check_ajax_referer( 'my_nonce', 'security' );
+            if ( ! current_user_can( 'manage_woocommerce' ) ) {
+                wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+            }
+            $json = isset( $_POST['json'] ) ? wp_unslash( $_POST['json'] ) : '';
+            if ( empty( $json ) ) {
+                wp_send_json_error( [ 'error' => 'JSON puudub.' ] );
+            }
+            $data = json_decode( $json, true );
+            if ( json_last_error() !== JSON_ERROR_NONE || ! is_array( $data ) ) {
+                wp_send_json_error( [ 'error' => 'Vigane JSON formaat.' ] );
+            }
+            $allowed = array_flip( $this->all_option_keys() );
+            foreach ( $data as $key => $value ) {
+                if ( isset( $allowed[ $key ] ) ) {
+                    update_option( $key, $value );
+                }
+            }
+            wp_send_json_success( [ 'message' => 'Seaded imporditud.' ] );
         }
 
         private function render_toggle( string $name, string $label, bool $on ): void {

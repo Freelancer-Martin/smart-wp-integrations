@@ -58,6 +58,84 @@ function deactivate_smart_wp_integrations() {
 register_activation_hook( __FILE__, 'activate_smart_wp_integrations' );
 register_deactivation_hook( __FILE__, 'deactivate_smart_wp_integrations' );
 
+// Feature 3: Automaatne uuesti saatmine — cron registreerimine
+register_activation_hook( __FILE__, function () {
+	if ( ! wp_next_scheduled( 'swi_retry_failed_orders' ) ) {
+		wp_schedule_event( time(), 'hourly', 'swi_retry_failed_orders' );
+	}
+} );
+register_deactivation_hook( __FILE__, function () {
+	wp_clear_scheduled_hook( 'swi_retry_failed_orders' );
+} );
+
+add_action( 'swi_retry_failed_orders', 'swi_do_retry_failed_orders' );
+
+/**
+ * Cron callback: saada uuesti ebaõnnestunud orderid (max 3 katset).
+ */
+function swi_do_retry_failed_orders(): void {
+	if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+		return;
+	}
+
+	$orders = wc_get_orders( [
+		'limit'      => 20,
+		'meta_key'   => '_swi_merit_retry',
+		'meta_value' => '1',
+	] );
+
+	if ( empty( $orders ) ) {
+		return;
+	}
+
+	foreach ( $orders as $order ) {
+		$order_id = $order->get_id();
+
+		// Ära proobi kui juba 3 korda ebaõnnestunud
+		$count = (int) get_post_meta( $order_id, '_swi_merit_retry_count', true );
+		if ( $count >= 3 ) {
+			continue;
+		}
+
+		// Ära saada kui juba saadetud
+		if ( get_post_meta( $order_id, '_swi_sent_merit', true ) ) {
+			delete_post_meta( $order_id, '_swi_merit_retry' );
+			delete_post_meta( $order_id, '_swi_merit_retry_count' );
+			continue;
+		}
+
+		// Vaja include et klassid oleksid saadaval (cron töötab ilma admin kontekstita)
+		if ( ! class_exists( 'My_Simple_Ajax_Plugin' ) || ! class_exists( 'LocalApiClient' ) ) {
+			continue;
+		}
+
+		$plugin_instance = new My_Simple_Ajax_Plugin();
+		$payload         = $plugin_instance->build_payload_for_order( $order );
+		if ( ! $payload ) {
+			continue;
+		}
+
+		$res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
+
+		if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+			update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+			delete_post_meta( $order_id, '_swi_merit_retry' );
+			delete_post_meta( $order_id, '_swi_merit_retry_count' );
+			$order->add_order_note( 'Merit Aktiva: arve edastatud automaatse uuesti saatmisega (katse ' . ( $count + 1 ) . ').' );
+			if ( function_exists( 'swi_log_send_history' ) ) {
+				swi_log_send_history( $order_id, 'ok', 'Automaatne uuesti saatmine õnnestus (katse ' . ( $count + 1 ) . ')' );
+			}
+		} else {
+			update_post_meta( $order_id, '_swi_merit_retry_count', $count + 1 );
+			$msg = $res['message'] ?? wp_json_encode( $res );
+			$order->add_order_note( 'Merit Aktiva: automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ') — ' . $msg );
+			if ( function_exists( 'swi_log_send_history' ) ) {
+				swi_log_send_history( $order_id, 'error', 'Automaatne uuesti saatmine ebaõnnestus katse ' . ( $count + 1 ) . ': ' . $msg );
+			}
+		}
+	}
+}
+
 /**
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.

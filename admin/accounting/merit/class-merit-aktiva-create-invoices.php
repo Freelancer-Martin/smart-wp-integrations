@@ -24,6 +24,15 @@ class My_Simple_Ajax_Plugin {
         add_action( 'wp_ajax_swi_merit_sync_check',  [ $this, 'handle_sync_check' ] );
         add_action( 'wp_ajax_swi_merit_sync_resend', [ $this, 'handle_sync_resend' ] );
 
+        // Feature 1: Merit UUID laadimine
+        add_action( 'wp_ajax_swi_merit_load_vatcodes', [ $this, 'handle_load_vatcodes' ] );
+
+        // Feature 6: Arve eelvaade
+        add_action( 'wp_ajax_swi_merit_preview_invoice', [ $this, 'handle_preview_invoice' ] );
+
+        // Feature 7: Saatmise ajalugu — kustuta
+        add_action( 'wp_ajax_swi_clear_history', [ $this, 'handle_clear_history' ] );
+
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
 
@@ -77,11 +86,27 @@ class My_Simple_Ajax_Plugin {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+            delete_post_meta( $order_id, '_swi_merit_retry' );
+            delete_post_meta( $order_id, '_swi_merit_retry_count' );
             $order->add_order_note( 'Merit Aktiva: arve edastatud (' . $res['status'] . ').' );
+            swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
         } else {
             $msg = $res['message'] ?? wp_json_encode( $res );
             $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
             error_log( 'SWI Merit auto-send failed order ' . $order_id . ': ' . wp_json_encode( $res ) );
+            // Feature 3: märgi uuesti saatmiseks
+            update_post_meta( $order_id, '_swi_merit_retry', '1' );
+            update_post_meta( $order_id, '_swi_merit_retry_count', 0 );
+            // Feature 4: e-mail teavitus
+            if ( get_option( 'swi_merit_email_notify' ) === 'yes' ) {
+                $admin_email = get_option( 'admin_email' );
+                wp_mail(
+                    $admin_email,
+                    'Merit Aktiva: arve saatmine ebaõnnestus #' . $order_id,
+                    'Tellimus #' . $order_id . ' edastamine Merit Aktivasse ebaõnnestus.' . "\n\n" . 'Viga: ' . $msg . "\n\nKontrolli: " . admin_url( 'admin.php?page=wc-settings&tab=smart_wp_integration' )
+                );
+            }
+            swi_log_send_history( $order_id, 'error', $msg );
         }
     }
 
@@ -219,12 +244,34 @@ class My_Simple_Ajax_Plugin {
             : gmdate( 'Ymd' );
         $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
 
+        // Feature 9: Kategooria → osakond kaardistus
+        $dept_map  = (array) get_option( 'swi_category_dept_map', [] );
+        $dept_code = $this->department_code ?: '';
+        if ( ! empty( $dept_map ) ) {
+            foreach ( $order->get_items() as $item ) {
+                $product = $item->get_product();
+                if ( ! $product ) {
+                    continue;
+                }
+                $cats = wp_get_post_terms( $product->get_id(), 'product_cat', [ 'fields' => 'slugs' ] );
+                if ( is_wp_error( $cats ) ) {
+                    continue;
+                }
+                foreach ( $cats as $cat_slug ) {
+                    if ( ! empty( $dept_map[ $cat_slug ] ) ) {
+                        $dept_code = $dept_map[ $cat_slug ];
+                        break 2;
+                    }
+                }
+            }
+        }
+
         $payload = [
             'Customer'       => $customer,
             'DocDate'        => $doc_date,
             'DueDate'        => $due_date,
             'InvoiceNo'      => $this->arve_eesliides . $order->get_id(),
-            'DepartmentCode' => $this->department_code ?: '',
+            'DepartmentCode' => $dept_code,
             'InvoiceRow'     => $rows,
             'TotalAmount'    => $total_amount,
             'RoundingAmount' => 0.0,
@@ -367,10 +414,12 @@ class My_Simple_Ajax_Plugin {
             if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
                 update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
                 $order->add_order_note( 'Merit Aktiva: arve edastatud käsitsi (' . $res['status'] . ').' );
+                swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
                 $results[] = $res;
             } else {
                 $msg = $res['message'] ?? wp_json_encode( $res );
                 $order->add_order_note( 'Merit Aktiva: käsitsi edastamine ebaõnnestus — ' . $msg );
+                swi_log_send_history( $order_id, 'error', $msg );
                 $errors[] = $res;
             }
         }
@@ -445,6 +494,59 @@ class My_Simple_Ajax_Plugin {
         wp_send_json_success( [ 'rows' => $rows, 'merit_count' => count( $merit_nos ) ] );
     }
 
+    /**
+     * Feature 1: Lae Merit VAT koodid (UUID-d) automaatselt serverist.
+     */
+    public function handle_load_vatcodes(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $client = new MeritServersDataClient();
+        try {
+            $vatcodes = $client->get_vatcodes();
+        } catch ( RuntimeException $e ) {
+            wp_send_json_error( [ 'error' => $e->getMessage() ] );
+            return;
+        }
+        wp_send_json_success( [ 'vatcodes' => $vatcodes ] );
+    }
+
+    /**
+     * Feature 6: Arve eelvaade — tagastab payload JSON-ina ilma saatmata.
+     */
+    public function handle_preview_invoice(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $order_id = absint( $_POST['order_id'] ?? 0 );
+        if ( ! $order_id ) {
+            wp_send_json_error( [ 'error' => 'Order ID puudub.' ] );
+        }
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
+        }
+        $payload = $this->build_payload_for_order( $order );
+        if ( ! $payload ) {
+            wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
+        }
+        wp_send_json_success( [ 'payload' => $payload ] );
+    }
+
+    /**
+     * Feature 7: Kustuta saatmise ajalugu.
+     */
+    public function handle_clear_history(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        delete_option( 'swi_send_history' );
+        wp_send_json_success( [ 'message' => 'Ajalugu kustutatud.' ] );
+    }
+
     public function handle_sync_resend(): void {
         check_ajax_referer( 'my_nonce', 'security' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -479,3 +581,21 @@ class My_Simple_Ajax_Plugin {
 }
 
 $test = new My_Simple_Ajax_Plugin();
+
+/**
+ * Feature 7: Lisa kirje saatmise ajalukku.
+ *
+ * @param int    $order_id Tellimuse ID.
+ * @param string $status   'ok' või 'error'.
+ * @param string $message  Lühike kirjeldus (max 200 märki salvestatakse).
+ */
+function swi_log_send_history( int $order_id, string $status, string $message ): void {
+    $history = (array) get_option( 'swi_send_history', [] );
+    array_unshift( $history, [
+        'time'     => current_time( 'mysql' ),
+        'order_id' => $order_id,
+        'status'   => $status,
+        'message'  => substr( $message, 0, 200 ),
+    ] );
+    update_option( 'swi_send_history', array_slice( $history, 0, 50 ), false );
+}
