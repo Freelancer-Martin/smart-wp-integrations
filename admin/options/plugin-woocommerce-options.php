@@ -544,10 +544,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <?php if (empty($history)) : ?>
                                 <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
                                 <?php else : ?>
-                                <p style="margin:0 0 12px;">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                                     <button type="button" id="swi-clear-history-btn" class="button button-small" style="color:#b32d2e;">Tühista ajalugu</button>
-                                </p>
-                                <table class="widefat striped">
+                                    <span style="font-size:12px;color:#6b7280;" id="swi-history-count"><?php echo count($history); ?> kirjet</span>
+                                </div>
+                                <table class="widefat striped" id="swi-history-table">
                                     <thead><tr>
                                         <th>Aeg</th>
                                         <th>Tellimus</th>
@@ -555,30 +556,59 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         <th>Sõnum</th>
                                     </tr></thead>
                                     <tbody>
-                                    <?php foreach ($history as $entry) :
+                                    <?php foreach ($history as $i => $entry) :
                                         $entry_status = $entry['status'] ?? '';
                                         $color = $entry_status === 'ok' ? '#14532d' : '#991b1b';
                                         $bg    = $entry_status === 'ok' ? '#dcfce7' : '#fee2e2';
-                                    ?>
-                                    <tr>
-                                        <td style="font-size:12px;"><?php echo esc_html($entry['time'] ?? ''); ?></td>
-                                        <td><a href="<?php echo esc_url(admin_url('post.php?post=' . intval($entry['order_id'] ?? 0) . '&action=edit')); ?>" target="_blank">#<?php echo intval($entry['order_id'] ?? 0); ?></a></td>
-                                        <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $color; ?>;"><?php echo esc_html($entry_status); ?></span></td>
-                                        <?php
                                         $raw_msg = $entry['message'] ?? '';
-                                        // Tõlgi vana JSON-kujul sõnum inimloetavaks
                                         if (str_starts_with(trim($raw_msg), '{')) {
                                             $decoded = json_decode($raw_msg, true);
                                             if (is_array($decoded) && function_exists('swi_humanize_merit_error')) {
                                                 $raw_msg = swi_humanize_merit_error($decoded);
                                             }
                                         }
-                                        ?>
+                                    ?>
+                                    <tr data-row="<?php echo $i; ?>">
+                                        <td style="font-size:12px;"><?php echo esc_html($entry['time'] ?? ''); ?></td>
+                                        <td><a href="<?php echo esc_url(admin_url('post.php?post=' . intval($entry['order_id'] ?? 0) . '&action=edit')); ?>" target="_blank">#<?php echo intval($entry['order_id'] ?? 0); ?></a></td>
+                                        <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $color; ?>;"><?php echo esc_html($entry_status); ?></span></td>
                                         <td style="font-size:12px;"><?php echo esc_html($raw_msg); ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     </tbody>
                                 </table>
+                                <div id="swi-history-pagination" style="display:flex;align-items:center;gap:4px;margin-top:12px;flex-wrap:wrap;"></div>
+                                <script>
+                                (function(){
+                                    var PER_PAGE = 10;
+                                    var rows = document.querySelectorAll('#swi-history-table tbody tr');
+                                    var total = rows.length;
+                                    var pages = Math.ceil(total / PER_PAGE);
+                                    if (pages <= 1) return;
+                                    var current = 1;
+                                    function showPage(p) {
+                                        current = p;
+                                        rows.forEach(function(tr, i) {
+                                            tr.style.display = (i >= (p-1)*PER_PAGE && i < p*PER_PAGE) ? '' : 'none';
+                                        });
+                                        renderPager();
+                                    }
+                                    function renderPager() {
+                                        var nav = document.getElementById('swi-history-pagination');
+                                        nav.innerHTML = '';
+                                        for (var i = 1; i <= pages; i++) {
+                                            var btn = document.createElement('button');
+                                            btn.type = 'button';
+                                            btn.textContent = i;
+                                            btn.style.cssText = 'min-width:32px;padding:3px 8px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;font-size:12px;'
+                                                + (i === current ? 'background:#2563eb;color:#fff;border-color:#2563eb;' : 'background:#fff;color:#374151;');
+                                            (function(page){ btn.addEventListener('click', function(){ showPage(page); }); })(i);
+                                            nav.appendChild(btn);
+                                        }
+                                    }
+                                    showPage(1);
+                                })();
+                                </script>
                                 <?php endif; ?>
                             </div>
                         </div>
