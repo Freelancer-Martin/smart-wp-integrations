@@ -97,13 +97,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
         private function s_smartaccounts( array $s ): array {
             return [
-                [ 'type' => 'title', 'id' => 'swi_sa_conn' ],
-                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'swi_smartaccounts_license_key', 'default' => '', 'desc' => 'Smart Accounts litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
-                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_smartaccounts_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
-                [ 'type' => 'sectionend', 'id' => 'swi_sa_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sa' ],
-                [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_smartaccounts_prefix',       'default' => 'SA' ],
-                [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_smartaccounts_order_status', 'options' => $s, 'default' => 'wc-completed' ],
+                [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_smartaccounts_prefix',        'default' => 'SA' ],
+                [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_smartaccounts_order_status',  'options' => $s, 'default' => 'wc-completed' ],
+                [ 'name' => 'Maksetähtaeg (päeva)',       'type' => 'number',   'id' => 'swi_smartaccounts_payment_days',  'default' => '14', 'desc' => 'päeva alates arve kuupäevast' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sa' ],
             ];
         }
@@ -781,8 +778,19 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-nav-item active" data-panel="sa-general" onclick="swiPanel('sa-general', this, 'smartaccounts')">
                             <span class="swi-nav-icon">⚙</span> Üldseaded
                         </div>
+                        <div class="swi-nav-item" data-panel="sa-history" onclick="swiPanel('sa-history', this, 'smartaccounts')">
+                            <span class="swi-nav-icon">📋</span> Saatmise ajalugu
+                        </div>
+                        <div class="swi-nav-item" data-panel="sa-sync" onclick="swiPanel('sa-sync', this, 'smartaccounts')">
+                            <span class="swi-nav-icon">🔄</span> Sünkroniseerimise kontroll
+                        </div>
+                        <div class="swi-nav-item" data-panel="sa-tools" onclick="swiPanel('sa-tools', this, 'smartaccounts')">
+                            <span class="swi-nav-icon">🔧</span> Tööriistad
+                        </div>
                     </nav>
                     <div class="swi-content">
+
+                        <!-- ÜLDSEADED -->
                         <div class="swi-panel active" id="swi-panel-sa-general">
                             <?php if ( isset($_GET['settings-updated']) ) : ?>
                             <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
@@ -796,13 +804,248 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Smart Accounts – Üldseaded</div>
-                            <div class="swi-section-desc">Smart Accounts Client ID ja Secret seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
+                            <div class="swi-section-desc">Smart Accounts API võtmed seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
                             <div class="swi-card" style="max-width:860px;">
                                 <?php $this->render_toggle('swi_smartaccounts_enable', 'Luba Smart Accounts', $sa_on); ?>
                                 <?php woocommerce_admin_fields($sa_s); ?>
                             </div>
-                            <div class="swi-alert info">ℹ <div>Smart Accounts ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Smart Accounts API seadistused lisatud.</div></div>
+                            <div class="swi-alert info">ℹ <div>Smart Accounts API (Client ID ja Client Secret) seadistatakse Laravel vaheserveri litsentsi seadetes, mitte siia.</div></div>
                         </div>
+
+                        <input type="hidden" id="swi_sa_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+
+                        <!-- SAATMISE AJALUGU -->
+                        <div class="swi-panel" id="swi-panel-sa-history">
+                            <div class="swi-section-title">Saatmise ajalugu</div>
+                            <div class="swi-section-desc">Viimased 50 Smart Accounts saatmiskatset (uusim üleval).</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <?php
+                                $sa_hist = get_option('swi_sa_send_history', []);
+                                if (empty($sa_hist)) : ?>
+                                <p style="color:#6b7280;margin:0;">Ühtegi saatmiskatset veel pole.</p>
+                                <?php else : ?>
+                                <div style="overflow-x:auto;">
+                                <table class="swi-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+                                    <thead><tr>
+                                        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid #e5e7eb;">Aeg</th>
+                                        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid #e5e7eb;">Order</th>
+                                        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid #e5e7eb;">Staatus</th>
+                                        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid #e5e7eb;">Teade</th>
+                                    </tr></thead>
+                                    <tbody id="swi-sa-history-tbody">
+                                    <?php
+                                    $sa_page     = 1;
+                                    $sa_per_page = 10;
+                                    $sa_pages    = ceil(count($sa_hist) / $sa_per_page);
+                                    $sa_slice    = array_slice($sa_hist, 0, $sa_per_page);
+                                    foreach ($sa_slice as $row) :
+                                        $ok = ($row['status'] === 'ok');
+                                    ?>
+                                    <tr>
+                                        <td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"><?php echo esc_html($row['time']); ?></td>
+                                        <td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">#<?php echo esc_html($row['order_id']); ?></td>
+                                        <td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">
+                                            <span style="color:<?php echo $ok ? '#16a34a' : '#dc2626'; ?>;font-weight:600;">
+                                                <?php echo $ok ? '✓ OK' : '✗ Viga'; ?>
+                                            </span>
+                                        </td>
+                                        <td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"><?php echo esc_html($row['message']); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                </div>
+                                <?php if ($sa_pages > 1) : ?>
+                                <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+                                    <button type="button" class="button" id="swi-sa-hist-prev" disabled onclick="swiSaHistPage(-1)">‹ Eelmine</button>
+                                    <span id="swi-sa-hist-page">1 / <?php echo $sa_pages; ?></span>
+                                    <button type="button" class="button" id="swi-sa-hist-next" onclick="swiSaHistPage(1)">Järgmine ›</button>
+                                </div>
+                                <script>
+                                var swiSaHist = <?php echo json_encode($sa_hist); ?>;
+                                var swiSaHistCur = 1, swiSaHistPer = 10;
+                                var swiSaHistPages = <?php echo $sa_pages; ?>;
+                                function swiSaHistPage(dir) {
+                                    swiSaHistCur = Math.max(1, Math.min(swiSaHistPages, swiSaHistCur + dir));
+                                    var slice = swiSaHist.slice((swiSaHistCur-1)*swiSaHistPer, swiSaHistCur*swiSaHistPer);
+                                    var tbody = document.getElementById('swi-sa-history-tbody');
+                                    tbody.innerHTML = slice.map(function(r){
+                                        var ok = r.status === 'ok';
+                                        return '<tr><td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + r.time +
+                                            '</td><td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">#' + r.order_id +
+                                            '</td><td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"><span style="color:' + (ok?'#16a34a':'#dc2626') + ';font-weight:600;">' + (ok?'✓ OK':'✗ Viga') + '</span>' +
+                                            '</td><td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + r.message + '</td></tr>';
+                                    }).join('');
+                                    document.getElementById('swi-sa-hist-page').textContent = swiSaHistCur + ' / ' + swiSaHistPages;
+                                    document.getElementById('swi-sa-hist-prev').disabled = swiSaHistCur <= 1;
+                                    document.getElementById('swi-sa-hist-next').disabled = swiSaHistCur >= swiSaHistPages;
+                                }
+                                </script>
+                                <?php endif; ?>
+                                <div style="margin-top:14px;text-align:right;">
+                                    <button type="button" class="button" id="swi-sa-clear-hist-btn"
+                                        onclick="if(confirm('Kustuta kogu ajalugu?')) jQuery.post(ajaxurl, {action:'swi_sa_clear_history', security: jQuery('#swi_sa_nonce').val()}, function(r){ if(r.success) { document.getElementById('swi-sa-history-tbody').innerHTML='<tr><td colspan=4 style=padding:10px;color:#6b7280;>Ajalugu kustutatud.</td></tr>'; } });">
+                                        Kustuta ajalugu
+                                    </button>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- SÜNKRONISEERIMISE KONTROLL -->
+                        <div class="swi-panel" id="swi-panel-sa-sync">
+                            <div class="swi-section-title">Sünkroniseerimise kontroll</div>
+                            <div class="swi-section-desc">Võrdleb WooCommerce tellimusi Smart Accounts arvetega ja näitab mis puudub.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <button type="button" class="button button-primary" id="swi-sa-sync-btn">
+                                    Kontrolli sünkroniseerimist
+                                </button>
+                                <span id="swi-sa-sync-spinner" style="display:none;margin-left:10px;">⏳ Kontrollin...</span>
+                                <div id="swi-sa-sync-result" style="margin-top:16px;"></div>
+                            </div>
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                var saBtn = document.getElementById('swi-sa-sync-btn');
+                                if (!saBtn) return;
+                                saBtn.addEventListener('click', function() {
+                                    var spinner = document.getElementById('swi-sa-sync-spinner');
+                                    var result  = document.getElementById('swi-sa-sync-result');
+                                    saBtn.disabled = true;
+                                    spinner.style.display = 'inline';
+                                    result.innerHTML = '';
+                                    jQuery.post(ajaxurl, {
+                                        action: 'swi_sa_sync_check',
+                                        security: jQuery('#swi_sa_nonce').val()
+                                    }, function(r) {
+                                        saBtn.disabled = false;
+                                        spinner.style.display = 'none';
+                                        if (!r.success) {
+                                            result.innerHTML = '<div class="swi-alert err">⚠ <div>' + (r.data.error||'Viga') + '</div></div>';
+                                            return;
+                                        }
+                                        var rows = r.data.rows || [];
+                                        var missing = r.data.missing_count || 0;
+                                        if (missing === 0) {
+                                            result.innerHTML = '<div class="swi-alert ok">✓ <div>Kõik arved on sünkroniseeritud.</div></div>';
+                                            return;
+                                        }
+                                        var html = '<div class="swi-alert err">⚠ <div>' + missing + ' arvet puudub Smart Accountsist</div></div>';
+                                        html += '<div style="overflow-x:auto;margin-top:10px;"><table class="swi-table" style="width:100%;border-collapse:collapse;font-size:13px;">';
+                                        html += '<thead><tr><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Arve nr</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Kuupäev</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Summa</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Saadetud</th><th></th></tr></thead><tbody>';
+                                        rows.filter(function(r){ return !r.in_sa; }).forEach(function(row) {
+                                            html += '<tr>';
+                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + row.inv_no + '</td>';
+                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + (row.date||'') + '</td>';
+                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + row.total + '</td>';
+                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + (row.meta_sent||'—') + '</td>';
+                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"><button class="button button-small swi-sa-resend-btn" data-id="' + row.order_id + '">Saada</button><span id="swi-sa-resend-result-' + row.order_id + '" style="margin-left:6px;font-size:11.5px;"></span></td>';
+                                            html += '</tr>';
+                                        });
+                                        html += '</tbody></table></div>';
+                                        result.innerHTML = html;
+                                        document.querySelectorAll('.swi-sa-resend-btn').forEach(function(btn) {
+                                            btn.addEventListener('click', function() {
+                                                var id = btn.dataset.id;
+                                                btn.disabled = true; btn.textContent = '...';
+                                                jQuery.post(ajaxurl, {action: 'swi_sa_sync_resend', security: jQuery('#swi_sa_nonce').val(), order_id: id}, function(r) {
+                                                    btn.disabled = false;
+                                                    var res = document.getElementById('swi-sa-resend-result-' + id);
+                                                    if (r.success) { btn.textContent = 'Saadetud'; res.innerHTML = '<span style="color:#16a34a">✓</span>'; }
+                                                    else { btn.textContent = 'Uuesti'; res.innerHTML = '<span style="color:#dc2626">✗ ' + ((r.data&&r.data.error)||'Viga') + '</span>'; }
+                                                });
+                                            });
+                                        });
+                                    }).fail(function() {
+                                        saBtn.disabled = false;
+                                        spinner.style.display = 'none';
+                                        result.innerHTML = '<div class="swi-alert err">⚠ <div>AJAX päring ebaõnnestus.</div></div>';
+                                    });
+                                });
+                            });
+                            </script>
+                        </div>
+
+                        <!-- TÖÖRIISTAD -->
+                        <div class="swi-panel" id="swi-panel-sa-tools">
+                            <div class="swi-section-title">Tööriistad</div>
+
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <h3 style="margin:0 0 8px;font-size:14px;">Sünkroniseeri kõik puuduvad</h3>
+                                <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Saadab kõik saadetamata tellimused Smart Accountsi (max 50 korraga).</p>
+                                <button type="button" class="button button-primary" id="swi-sa-bulk-btn">
+                                    Sünkroniseeri kõik puuduvad
+                                </button>
+                                <span id="swi-sa-bulk-spinner" style="display:none;margin-left:10px;">⏳ Saadan...</span>
+                                <div id="swi-sa-bulk-result" style="margin-top:12px;font-size:13px;"></div>
+                            </div>
+
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <h3 style="margin:0 0 8px;font-size:14px;">Käsitsi saatmine</h3>
+                                <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Saada üks konkreetne tellimus tellimuse ID järgi.</p>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <input type="number" id="swi-sa-manual-id" placeholder="Tellimuse ID" style="width:150px;" class="regular-text">
+                                    <button type="button" class="button" id="swi-sa-manual-btn">Saada</button>
+                                    <button type="button" class="button" id="swi-sa-preview-btn">Eelvaade (JSON)</button>
+                                </div>
+                                <div id="swi-sa-manual-result" style="margin-top:10px;font-size:13px;"></div>
+                                <pre id="swi-sa-preview-result" style="display:none;margin-top:10px;background:#f9fafb;border:1px solid #e5e7eb;padding:10px;border-radius:4px;font-size:11px;overflow:auto;max-height:300px;"></pre>
+                            </div>
+
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                // Bulk send
+                                var saBlkBtn = document.getElementById('swi-sa-bulk-btn');
+                                if (saBlkBtn) {
+                                    saBlkBtn.addEventListener('click', function() {
+                                        var spinner = document.getElementById('swi-sa-bulk-spinner');
+                                        var result  = document.getElementById('swi-sa-bulk-result');
+                                        saBlkBtn.disabled = true;
+                                        spinner.style.display = 'inline';
+                                        result.innerHTML = '';
+                                        jQuery.post(ajaxurl, {action:'swi_sa_bulk_send', security:document.getElementById('swi_sa_nonce').value}, function(r) {
+                                            saBlkBtn.disabled = false;
+                                            spinner.style.display = 'none';
+                                            if (r.success) {
+                                                var d = r.data;
+                                                var color = d.failed > 0 ? '#d97706' : '#16a34a';
+                                                result.innerHTML = '<span style="color:' + color + ';font-weight:600;">' + d.message + '</span>';
+                                                if (d.errors && d.errors.length) result.innerHTML += '<br><span style="color:#dc2626;font-size:12px;">' + d.errors.join('<br>') + '</span>';
+                                            } else {
+                                                result.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
+                                            }
+                                        }).fail(function(){ saBlkBtn.disabled=false; spinner.style.display='none'; result.innerHTML='<span style="color:#dc2626">AJAX viga.</span>'; });
+                                    });
+                                }
+                                // Manual send
+                                var saManBtn = document.getElementById('swi-sa-manual-btn');
+                                var saPrvBtn = document.getElementById('swi-sa-preview-btn');
+                                function saSendManual(preview) {
+                                    var id = document.getElementById('swi-sa-manual-id').value;
+                                    if (!id) { alert('Sisesta tellimuse ID'); return; }
+                                    var result = document.getElementById('swi-sa-manual-result');
+                                    var pre    = document.getElementById('swi-sa-preview-result');
+                                    result.innerHTML = '⏳ Saadan...';
+                                    pre.style.display = 'none';
+                                    var data = {action:'swi_sa_manual_send', security:document.getElementById('swi_sa_nonce').value, order_id:id};
+                                    if (preview) data.preview_only = 1;
+                                    jQuery.post(ajaxurl, data, function(r) {
+                                        if (preview && r.success) {
+                                            result.innerHTML = '';
+                                            pre.textContent = JSON.stringify(r.data.payload, null, 2);
+                                            pre.style.display = 'block';
+                                        } else if (r.success) {
+                                            result.innerHTML = '<span style="color:#16a34a">✓ ' + r.data.message + '</span>';
+                                        } else {
+                                            result.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
+                                        }
+                                    });
+                                }
+                                if (saManBtn) saManBtn.addEventListener('click', function() { saSendManual(false); });
+                                if (saPrvBtn) saPrvBtn.addEventListener('click', function() { saSendManual(true); });
+                            });
+                            </script>
+                        </div>
+
                     </div>
                 </div>
 
@@ -1319,6 +1562,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartaccounts_license_key',
                 'swi_smartaccounts_crypto_key',
                 'swi_smartaccounts_prefix',
+                'swi_smartaccounts_payment_days',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );

@@ -159,6 +159,11 @@ class Smart_Wp_Integrations {
 			new SWI_Simplebooks_Create_Invoices();
 		}
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/smartaccounts/class-smartaccounts-create-invoices.php';
+		if ( get_option( 'swi_smartaccounts_enable' ) === 'yes' ) {
+			new SWI_SmartAccounts_Create_Invoices();
+		}
+
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
 		 */

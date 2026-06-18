@@ -327,6 +327,74 @@ function swi_do_simplebooks_retry(): void {
 add_action( 'swi_retry_failed_orders', 'swi_do_simplebooks_retry' );
 
 /**
+ * Smart Accounts automaatne uuesti saatmine.
+ */
+function swi_do_smartaccounts_retry(): void {
+	if ( get_option( 'swi_smartaccounts_enable' ) !== 'yes' ) {
+		return;
+	}
+
+	$orders = wc_get_orders( [
+		'limit'      => 20,
+		'meta_key'   => '_swi_smartaccounts_retry',
+		'meta_value' => '1',
+	] );
+
+	if ( empty( $orders ) ) {
+		return;
+	}
+
+	foreach ( $orders as $order ) {
+		$order_id = $order->get_id();
+		$count    = (int) $order->get_meta( '_swi_smartaccounts_retry_count' );
+
+		if ( $count >= 3 ) {
+			$order->delete_meta_data( '_swi_smartaccounts_retry' );
+			$order->delete_meta_data( '_swi_smartaccounts_retry_count' );
+			$order->save();
+			continue;
+		}
+
+		if ( $order->get_meta( '_swi_sent_smartaccounts' ) ) {
+			$order->delete_meta_data( '_swi_smartaccounts_retry' );
+			$order->delete_meta_data( '_swi_smartaccounts_retry_count' );
+			$order->save();
+			continue;
+		}
+
+		if ( ! class_exists( 'SWI_SmartAccounts_Create_Invoices' ) || ! class_exists( 'LocalApiClient' ) ) {
+			continue;
+		}
+
+		$instance = new SWI_SmartAccounts_Create_Invoices();
+		$payload  = $instance->build_payload( $order );
+		if ( ! $payload ) {
+			continue;
+		}
+
+		$res = LocalApiClient::sendEncryptedOrder( $payload, 'smartaccounts' );
+
+		if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+			$order->update_meta_data( '_swi_sent_smartaccounts', current_time( 'mysql' ) );
+			$order->delete_meta_data( '_swi_smartaccounts_retry' );
+			$order->delete_meta_data( '_swi_smartaccounts_retry_count' );
+			$order->save();
+			$order->add_order_note( 'Smart Accounts: arve edastatud automaatse uuesti saatmisega (katse ' . ( $count + 1 ) . ').' );
+			if ( function_exists( 'swi_sa_log_send_history' ) ) {
+				swi_sa_log_send_history( $order_id, 'ok', 'Automaatne uuesti saatmine õnnestus (katse ' . ( $count + 1 ) . ')' );
+			}
+		} else {
+			$order->update_meta_data( '_swi_smartaccounts_retry_count', $count + 1 );
+			$order->save();
+			if ( function_exists( 'swi_sa_log_send_history' ) ) {
+				swi_sa_log_send_history( $order_id, 'error', 'Automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ')' );
+			}
+		}
+	}
+}
+add_action( 'swi_retry_failed_orders', 'swi_do_smartaccounts_retry' );
+
+/**
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.
  */
