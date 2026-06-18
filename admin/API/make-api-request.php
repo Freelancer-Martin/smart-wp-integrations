@@ -12,7 +12,8 @@ class LocalApiClient {
      * Litsentsi kontroll: lihtne kontroll (Bearer), tagastab JSON.
      * Orderi saatmine: AES-GCM payload (iv,data,tag) + system.
      */
-    protected static $license_endpoint = 'http://172.168.10.105/api/license/check';
+    protected static $license_endpoint  = 'http://172.168.10.105/api/license/check';
+    protected static $health_endpoint   = 'http://172.168.10.105/api/health';
     
     // === AJAX: krüpteeritud orderi saatmine läbi WP AJAX-i ===
     public function __construct() {
@@ -25,6 +26,34 @@ class LocalApiClient {
     }
 
     
+    /**
+     * Kontrollib, kas vaheserver on kättesaadav.
+     * Tagastab null kui ok, veateate kui ei saa ühendust.
+     */
+    public static function pingServer(): ?string {
+        $license_key = get_option( 'smart_wp_integtaion_license_text', '' );
+
+        $resp = wp_remote_get( self::$health_endpoint, [
+            'timeout' => 5,
+            'headers' => [
+                'X-License-Token' => $license_key,
+                'Accept'          => 'application/json',
+            ],
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            return $resp->get_error_message();
+        }
+
+        $code = wp_remote_retrieve_response_code( $resp );
+        if ( $code < 200 || $code >= 300 ) {
+            $body = wp_remote_retrieve_body( $resp );
+            return sprintf( 'HTTP %d: %s', $code, wp_strip_all_tags( $body ) );
+        }
+
+        return null;
+    }
+
     /**
      * Saada krüpteeritud order (AES-256-GCM).
      * Backend eeldab välju: system, iv, data, tag (HEX või BASE64). Kasutame BASE64.

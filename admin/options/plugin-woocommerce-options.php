@@ -11,6 +11,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         private $opt_tax_map      = 'smart_wp_integtaion_tax_map';
         private $opt_country_map  = 'smart_wp_integtaion_country_map';
         private $merit_api_error  = null;
+        private $proxy_api_error  = null;
 
         public function __construct() {
             $this->id    = 'smart_wp_integration';
@@ -221,6 +222,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         public function output() {
             // Trigger get_settings() early so $this->merit_api_error is populated before we render.
             $settings = $this->get_settings();
+
+            // Check intermediate (proxy) server connectivity.
+            if ( class_exists( 'LocalApiClient' ) ) {
+                $this->proxy_api_error = LocalApiClient::pingServer();
+            }
             ?>
 
             <?php if ( $this->merit_api_error ) : ?>
@@ -286,6 +292,63 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     to   { opacity: 1; transform: translateX(0); }
                 }
             </style>
+            <?php endif; ?>
+
+            <?php if ( $this->proxy_api_error ) : ?>
+            <div id="swi-proxy-error-popup" style="
+                position: fixed;
+                top: <?php echo $this->merit_api_error ? '220px' : '72px'; ?>;
+                right: 24px;
+                z-index: 99999;
+                max-width: 420px;
+                width: calc(100% - 48px);
+                background: #fff;
+                border-left: 5px solid #c0392b;
+                border-radius: 6px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+                padding: 20px 48px 20px 22px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                animation: swi-slide-in .25s ease .08s both;
+            ">
+                <button
+                    type="button"
+                    onclick="document.getElementById('swi-proxy-error-popup').remove()"
+                    style="
+                        position: absolute;
+                        top: 10px;
+                        right: 12px;
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        font-size: 20px;
+                        line-height: 1;
+                        color: #888;
+                        padding: 0 4px;
+                    "
+                    aria-label="<?php esc_attr_e( 'Sulge', 'smart-wp-integration' ); ?>"
+                >&times;</button>
+
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                         xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+                        <rect x="2" y="3" width="20" height="5" rx="1.5" stroke="#c0392b" stroke-width="2"/>
+                        <rect x="2" y="10" width="20" height="5" rx="1.5" stroke="#c0392b" stroke-width="2" opacity=".45"/>
+                        <rect x="2" y="17" width="20" height="5" rx="1.5" stroke="#c0392b" stroke-width="2" opacity=".2"/>
+                        <line x1="18" y1="1" x2="22" y2="9" stroke="#c0392b" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <strong style="font-size:15px; color:#1a1a2e;">
+                        <?php esc_html_e( 'Vaheserver – ühenduse viga', 'smart-wp-integration' ); ?>
+                    </strong>
+                </div>
+
+                <p style="margin:0 0 8px; font-size:13.5px; color:#4a4a6a; line-height:1.6;">
+                    <?php esc_html_e( 'Vaheserver ei ole kättesaadav. Tellimuste edastamine Merit Aktivasse on peatunud kuni ühendus taastatakse.', 'smart-wp-integration' ); ?>
+                </p>
+                <p style="margin:0; font-size:12px; color:#888; word-break:break-all;">
+                    <strong><?php esc_html_e( 'Serveri vastus:', 'smart-wp-integration' ); ?></strong>
+                    <?php echo esc_html( $this->proxy_api_error ); ?>
+                </p>
+            </div>
             <?php endif; ?>
 
             <style>
