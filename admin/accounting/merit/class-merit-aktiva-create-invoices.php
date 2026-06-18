@@ -91,7 +91,7 @@ class My_Simple_Ajax_Plugin {
             $order->add_order_note( 'Merit Aktiva: arve edastatud (' . $res['status'] . ').' );
             swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
         } else {
-            $msg = $res['message'] ?? wp_json_encode( $res );
+            $msg = swi_humanize_merit_error( $res );
             $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
             error_log( 'SWI Merit auto-send failed order ' . $order_id . ': ' . wp_json_encode( $res ) );
             // Feature 3: märgi uuesti saatmiseks
@@ -417,7 +417,7 @@ class My_Simple_Ajax_Plugin {
                 swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
                 $results[] = $res;
             } else {
-                $msg = $res['message'] ?? wp_json_encode( $res );
+                $msg = swi_humanize_merit_error( $res );
                 $order->add_order_note( 'Merit Aktiva: käsitsi edastamine ebaõnnestus — ' . $msg );
                 swi_log_send_history( $order_id, 'error', $msg );
                 $errors[] = $res;
@@ -589,6 +589,38 @@ $test = new My_Simple_Ajax_Plugin();
  * @param string $status   'ok' või 'error'.
  * @param string $message  Lühike kirjeldus (max 200 märki salvestatakse).
  */
+/**
+ * Tõlgib tuntud Merit API veakoodid inimloetavaks eesti keelde.
+ */
+function swi_humanize_merit_error( array $res ): string {
+    $merit_msg = $res['response']['result']['merit_message']
+        ?? $res['response']['result']['body']
+        ?? $res['merit_message']
+        ?? '';
+    $raw = $merit_msg ?: ( $res['message'] ?? '' );
+
+    $map = [
+        'Korduv arve number'                => 'Arve on Meriti juba olemas (korduvnumber).',
+        'Ridade summa ei võrdu arve summaga' => 'Arve ridade summa ei klapi arvesummaga — kontrolli toodete hindasid.',
+        'Periood liiga pikk'                 => 'Valitud ajaperiood on liiga pikk (Merit lubab max 3 kuud).',
+        'kaubakoodi liiga pikk'              => 'Toote SKU kood on liiga pikk (max 20 tähemärki).',
+        'Handler returned failure'           => 'Merit keeldus arvet vastu võtmast.',
+        'HTTP 422'                           => 'Merit keeldus arvet vastu võtmast (andmeviga).',
+        'HTTP 400'                           => 'Merit tagastas vigase päringu (400).',
+        'HTTP 500'                           => 'Merit server viga — proovi hiljem uuesti.',
+        'timed out'                          => 'Ühendus Merit serveriga aegus — proovi uuesti.',
+        'cURL error'                         => 'Võrguühenduse viga Merit serveriga.',
+    ];
+
+    foreach ( $map as $key => $friendly ) {
+        if ( str_contains( $raw, $key ) ) {
+            return $friendly;
+        }
+    }
+
+    return $raw ?: 'Tundmatu viga Merit API-lt.';
+}
+
 function swi_log_send_history( int $order_id, string $status, string $message ): void {
     $history = (array) get_option( 'swi_send_history', [] );
     array_unshift( $history, [

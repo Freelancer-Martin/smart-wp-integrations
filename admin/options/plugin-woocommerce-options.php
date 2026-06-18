@@ -564,7 +564,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         <td style="font-size:12px;"><?php echo esc_html($entry['time'] ?? ''); ?></td>
                                         <td><a href="<?php echo esc_url(admin_url('post.php?post=' . intval($entry['order_id'] ?? 0) . '&action=edit')); ?>" target="_blank">#<?php echo intval($entry['order_id'] ?? 0); ?></a></td>
                                         <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $color; ?>;"><?php echo esc_html($entry_status); ?></span></td>
-                                        <td style="font-size:12px;"><?php echo esc_html($entry['message'] ?? ''); ?></td>
+                                        <?php
+                                        $raw_msg = $entry['message'] ?? '';
+                                        // Tõlgi vana JSON-kujul sõnum inimloetavaks
+                                        if (str_starts_with(trim($raw_msg), '{')) {
+                                            $decoded = json_decode($raw_msg, true);
+                                            if (is_array($decoded) && function_exists('swi_humanize_merit_error')) {
+                                                $raw_msg = swi_humanize_merit_error($decoded);
+                                            }
+                                        }
+                                        ?>
+                                        <td style="font-size:12px;"><?php echo esc_html($raw_msg); ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     </tbody>
