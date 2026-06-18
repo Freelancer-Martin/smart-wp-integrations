@@ -506,13 +506,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 }
             }
 
-            // Checkboxes — absent from POST means unchecked
+            // Toggles — hidden input sends 'yes' or 'no' explicitly
             foreach ( [
                 'smart_wp_integtaion_enable',
                 'swi_simplebooks_enable',
                 'swi_smartaccounts_enable',
             ] as $field ) {
-                update_option( $field, isset( $_POST[ $field ] ) ? 'yes' : 'no' );
+                $val = sanitize_text_field( wp_unslash( $_POST[ $field ] ?? 'no' ) );
+                update_option( $field, $val === 'yes' ? 'yes' : 'no' );
             }
 
             // Maps (country, payment, tax, shipping)
