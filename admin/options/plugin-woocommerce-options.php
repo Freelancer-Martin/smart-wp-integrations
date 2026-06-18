@@ -297,7 +297,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php echo $this->proxy_error ? 'Server ei vasta' : 'Server ühendatud'; ?>
                         </div>
                         <button type="submit" name="save" value="Save changes" class="swi-save-btn"
-                            onclick="window.onbeforeunload=null;jQuery(window).off('beforeunload');">Salvesta</button>
+                            onclick="window.onbeforeunload=null;jQuery(window).off('beforeunload beforeunload.admin_settings beforeunload.wc_settings');">Salvesta</button>
                     </div>
                 </div>
 
@@ -833,6 +833,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 document.body.appendChild(n);
                 setTimeout(function(){ n.style.transition='opacity .4s'; n.style.opacity='0'; setTimeout(function(){ n.remove(); }, 400); }, 5000);
             }
+
+            // WooCommerce seab window.onbeforeunload kui vorm on "dirty".
+            // Clearime KÕIK beforeunload handlerid iga kord kui meie vorm submitib.
+            jQuery('#mainform').on('submit', function() {
+                window.onbeforeunload = null;
+                jQuery(window).off('beforeunload beforeunload.admin_settings beforeunload.wc_settings');
+            });
 
             document.addEventListener('DOMContentLoaded', function() {
                 var btn = document.getElementById('swi-sync-btn');
