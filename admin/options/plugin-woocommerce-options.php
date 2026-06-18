@@ -735,10 +735,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         var raw = (d.response && d.response.result && d.response.result.merit_message)
                                             || (d.response && d.response.result && d.response.result.body)
                                             || d.merit_message || d.message || '';
-                                        var friendly = raw
-                                            .replace('Korduv arve number.', 'Arve on Meriti juba olemas — kustuta see Meritist enne uuesti saatmist.')
-                                            .replace('Ridade summa ei võrdu arve summaga.', 'Arve summa ei klapi — kontrolli kaupade hindu WooCommerce-is.')
-                                            .trim() || 'Merit Aktiva tagastas vea. Vaata logifaili täpsema info saamiseks.';
+                                        var meritErrors = {
+                                            'Korduv arve number': 'See arve on Meriti juba olemas. Kui soovid uuesti saata, kustuta arve esmalt Merit Aktivas.',
+                                            'Ridade summa ei võrdu arve summaga': 'Arve ridade kogusumma ei klapi arvele märgitud summaga. Kontrolli toodete hindu WooCommerce-is.',
+                                            'Periood liiga pikk': 'Päringus valitud ajaperiood on liiga pikk — Merit lubab korraga max 3 kuud.',
+                                            'kaubakoodi liiga pikk': 'Toote SKU kood on liiga pikk (max 20 tähemärki). Lühenda SKU-d WooCommerce toote seadetes.',
+                                        };
+                                        var friendly = raw;
+                                        Object.keys(meritErrors).forEach(function(key) {
+                                            if (raw.indexOf(key) !== -1) friendly = meritErrors[key];
+                                        });
+                                        if (friendly === raw) friendly = 'Merit Aktiva tagastas vea: ' + (raw || 'tundmatu viga') + '. Vaata logifaili täpsema info saamiseks.';
                                         swiNotify('Arve ' + orderId + ': ' + friendly, 'error');
                                     }
                                 });

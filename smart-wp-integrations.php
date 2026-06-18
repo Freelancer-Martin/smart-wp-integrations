@@ -91,9 +91,11 @@ function swi_do_retry_failed_orders(): void {
 	foreach ( $orders as $order ) {
 		$order_id = $order->get_id();
 
-		// Ära proobi kui juba 3 korda ebaõnnestunud
+		// Ära proobi kui juba 3 korda ebaõnnestunud — eemalda retry flag
 		$count = (int) get_post_meta( $order_id, '_swi_merit_retry_count', true );
 		if ( $count >= 3 ) {
+			delete_post_meta( $order_id, '_swi_merit_retry' );
+			delete_post_meta( $order_id, '_swi_merit_retry_count' );
 			continue;
 		}
 
@@ -126,8 +128,19 @@ function swi_do_retry_failed_orders(): void {
 				swi_log_send_history( $order_id, 'ok', 'Automaatne uuesti saatmine õnnestus (katse ' . ( $count + 1 ) . ')' );
 			}
 		} else {
-			update_post_meta( $order_id, '_swi_merit_retry_count', $count + 1 );
 			$msg = $res['message'] ?? wp_json_encode( $res );
+
+			// "Korduv arve number" — arve on Meriti juba olemas, märgi saadetuna
+			$merit_body = $res['response']['result']['merit_message'] ?? $res['response']['result']['body'] ?? '';
+			if ( str_contains( $merit_body, 'Korduv arve number' ) || str_contains( $msg, 'Korduv arve number' ) ) {
+				update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+				delete_post_meta( $order_id, '_swi_merit_retry' );
+				delete_post_meta( $order_id, '_swi_merit_retry_count' );
+				$order->add_order_note( 'Merit Aktiva: arve on Meriti juba olemas — märgitud saadetuna.' );
+				continue;
+			}
+
+			update_post_meta( $order_id, '_swi_merit_retry_count', $count + 1 );
 			$order->add_order_note( 'Merit Aktiva: automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ') — ' . $msg );
 			if ( function_exists( 'swi_log_send_history' ) ) {
 				swi_log_send_history( $order_id, 'error', 'Automaatne uuesti saatmine ebaõnnestus katse ' . ( $count + 1 ) . ': ' . $msg );
