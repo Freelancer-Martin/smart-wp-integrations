@@ -56,6 +56,11 @@ class MeritServersDataClient {
         return $data['invoices'] ?? [];
     }
 
+    public function get_all_invoices_for_sync( int $months = 12 ): array {
+        $data = $this->call( 'merit/all-invoices?months=' . $months );
+        return $data['invoices'] ?? [];
+    }
+
     public function merit_send_invoice_by_email( string $invoiceGuid ): void {
         // E-maili saatmine käib läbi Laravel-i — praegu mitte implementeeritud.
         // Kui vaja, lisa POST /api/merit/send-invoice-email endpoint.

@@ -354,20 +354,16 @@ class My_Simple_Ajax_Plugin {
         }
 
         // Küsi kõik Merit arved viimasest 12 kuust
-        $base        = LocalApiClient::get_base_url_public();
-        $license_key = get_option( 'smart_wp_integtaion_license_text', '' );
-        $resp = wp_remote_get( rtrim( $base, '/' ) . '/api/merit/all-invoices?months=12', [
-            'timeout' => 20,
-            'headers' => [ 'X-License-Token' => $license_key, 'Accept' => 'application/json' ],
-        ] );
-
+        $client    = new MeritServersDataClient();
         $merit_nos = [];
-        if ( ! is_wp_error( $resp ) && wp_remote_retrieve_response_code( $resp ) === 200 ) {
-            $data = json_decode( wp_remote_retrieve_body( $resp ), true );
-            foreach ( (array) ( $data['invoices'] ?? [] ) as $inv ) {
-                $no = $inv['InvoiceNo'] ?? ( $inv['invoiceNo'] ?? null );
+        try {
+            $invoices = $client->get_all_invoices_for_sync( 12 );
+            foreach ( $invoices as $inv ) {
+                $no = is_array( $inv ) ? ( $inv['InvoiceNo'] ?? null ) : ( $inv->InvoiceNo ?? null );
                 if ( $no ) $merit_nos[] = $no;
             }
+        } catch ( RuntimeException $e ) {
+            wp_send_json_error( [ 'error' => 'Merit API viga: ' . $e->getMessage() ] );
         }
 
         // Kõik WC orderid konfigureeritava staatusega
