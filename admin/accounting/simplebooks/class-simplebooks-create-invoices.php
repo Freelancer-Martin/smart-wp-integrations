@@ -381,8 +381,8 @@ class SWI_Simplebooks_Create_Invoices {
         $body     = json_decode( wp_remote_retrieve_body( $resp ), true );
         $invoices = $body['data'] ?? $body ?? [];
         foreach ( (array) $invoices as $inv ) {
-            // Simplebooks arve struktuur: {'Invoice': {'number': 'SB123', ...}}
-            $no = $inv['Invoice']['number'] ?? $inv['number'] ?? null;
+            // Simplebooks list tagastab 'invoices' (väike, mitmus), mitte 'Invoice'
+            $no = $inv['invoices']['number'] ?? $inv['Invoice']['number'] ?? $inv['number'] ?? null;
             if ( $no ) {
                 $sb_nos[] = (string) $no;
             }
