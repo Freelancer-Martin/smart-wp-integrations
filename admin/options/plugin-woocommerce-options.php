@@ -77,7 +77,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     '1e420e04-3dd7-46a5-b71f-0490779c2638' => '24%',
                 ], 'default' => '1e420e04-3dd7-46a5-b71f-0490779c2638' ],
                 [ 'name' => 'Arve ridade tüüp', 'type' => 'select', 'id' => 'smart_wp_integtaion_arve_ridade_tyyp', 'options' => [1=>'LaoKaup',2=>'Teenus',3=>'Kaup'], 'default' => 1 ],
-                [ 'name' => 'Osakond', 'type' => 'select', 'id' => 'smart_wp_integtaion_deparment', 'options' => $dopts, 'default' => '' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_merit' ],
             ];
         }
@@ -474,7 +473,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     <?php if (!empty($dept_map_saved)) : foreach ($dept_map_saved as $cat_slug => $dept_val) : ?>
                                     <tr>
                                         <td>
-                                            <select name="swi_category_dept_map[<?php echo esc_attr($cat_slug); ?>]" style="width:100%;">
+                                            <select name="swi_dept_map_cat[]" style="width:100%;">
                                                 <option value="">— kategooria —</option>
                                                 <?php if (!is_wp_error($categories)) foreach ($categories as $cat) : ?>
                                                 <option value="<?php echo esc_attr($cat->slug); ?>" <?php selected($cat_slug, $cat->slug); ?>><?php echo esc_html($cat->name); ?></option>
@@ -482,7 +481,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             </select>
                                         </td>
                                         <td>
-                                            <select name="swi_category_dept_map[<?php echo esc_attr($cat_slug); ?>]" style="width:100%;">
+                                            <select name="swi_dept_map_dept[]" style="width:100%;">
                                                 <option value="">— kasuta vaikimisi —</option>
                                                 <?php foreach ($depts2 as $dc) : ?>
                                                 <option value="<?php echo esc_attr($dc); ?>" <?php selected($dept_val, $dc); ?>><?php echo esc_html($dc); ?></option>
@@ -499,15 +498,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 </p>
                                 <script>
                                 document.getElementById('swi-add-dept-row') && document.getElementById('swi-add-dept-row').addEventListener('click', function() {
-                                    var uid = 'new_' + Date.now();
                                     var tbody = document.querySelector('#swi-dept-map-table tbody');
                                     var cats = <?php echo wp_json_encode(!is_wp_error($categories) ? array_map(function($c){ return ['slug'=>$c->slug,'name'=>$c->name]; }, $categories) : []); ?>;
-                                    var depts = <?php echo wp_json_encode($depts2); ?>;
+                                    var depts = <?php echo wp_json_encode(array_values($depts2)); ?>;
                                     var catOpts = '<option value="">— kategooria —</option>' + cats.map(function(c){ return '<option value="'+c.slug+'">'+c.name+'</option>'; }).join('');
                                     var deptOpts = '<option value="">— kasuta vaikimisi —</option>' + depts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
                                     var tr = document.createElement('tr');
-                                    tr.innerHTML = '<td><select name="swi_category_dept_map['+uid+']" style="width:100%;">'+catOpts+'</select></td>'
-                                        + '<td><select name="swi_category_dept_map['+uid+']" style="width:100%;">'+deptOpts+'</select></td>'
+                                    tr.innerHTML = '<td><select name="swi_dept_map_cat[]" style="width:100%;">'+catOpts+'</select></td>'
+                                        + '<td><select name="swi_dept_map_dept[]" style="width:100%;">'+deptOpts+'</select></td>'
                                         + '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px;">✕</button></td>';
                                     tbody.appendChild(tr);
                                 });
@@ -989,15 +987,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             }
 
             // Feature 9: Kategooria → osakond kaardistus
-            $dept_map_raw = isset($_POST['swi_category_dept_map']) ? (array)$_POST['swi_category_dept_map'] : [];
-            // The table uses same name for both columns; we need to handle paired values.
-            // Since the select elements share the same name, PHP receives an array; we store as-is after sanitizing.
+            $map_cats  = array_values(isset($_POST['swi_dept_map_cat'])  ? (array)$_POST['swi_dept_map_cat']  : []);
+            $map_depts = array_values(isset($_POST['swi_dept_map_dept']) ? (array)$_POST['swi_dept_map_dept'] : []);
             $dept_map_clean = [];
-            foreach ($dept_map_raw as $k => $v) {
-                $clean_k = sanitize_text_field(wp_unslash((string)$k));
-                $clean_v = sanitize_text_field(wp_unslash((string)$v));
-                if ($clean_k !== '' && $clean_v !== '') {
-                    $dept_map_clean[$clean_k] = $clean_v;
+            foreach ($map_cats as $i => $cat_slug) {
+                $k = sanitize_text_field(wp_unslash((string)$cat_slug));
+                $v = sanitize_text_field(wp_unslash((string)($map_depts[$i] ?? '')));
+                if ($k !== '' && $v !== '') {
+                    $dept_map_clean[$k] = $v;
                 }
             }
             update_option('swi_category_dept_map', $dept_map_clean, false);
