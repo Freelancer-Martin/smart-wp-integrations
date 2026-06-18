@@ -48,9 +48,18 @@ class LocalApiClient {
         return null;
     }
 
+    private static function keys_for_system( string $system ): array {
+        $map = [
+            'merit'        => [ 'smart_wp_integtaion_license_text', 'smart_wp_integtaion_crypto_text' ],
+            'simplebooks'  => [ 'swi_simplebooks_license_key',      'swi_simplebooks_crypto_key' ],
+            'smartaccounts'=> [ 'swi_smartaccounts_license_key',     'swi_smartaccounts_crypto_key' ],
+        ];
+        [ $lk, $ck ] = $map[ $system ] ?? $map['merit'];
+        return [ get_option( $lk, '' ), get_option( $ck, '' ) ];
+    }
+
     public static function sendEncryptedOrder( array $orderPayload, string $system = 'merit', ?string $aad = null ): array {
-        $crypto_key  = get_option( 'smart_wp_integtaion_crypto_text' );
-        $license_key = get_option( 'smart_wp_integtaion_license_text' );
+        [ $license_key, $crypto_key ] = self::keys_for_system( $system );
 
         if ( empty( $crypto_key ) || empty( $license_key ) ) {
             return [ 'status' => 'error', 'message' => 'Litsentsi võti või krüptovõti puudub seadistustes.' ];

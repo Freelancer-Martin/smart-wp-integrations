@@ -39,15 +39,16 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             );
         }
 
-        private function s_connection(): array {
+        private function s_server_url(): array {
             return [
-                [ 'type' => 'title', 'id' => 'swi_conn' ],
-                [ 'name' => 'Vaheserveri URL',  'type' => 'text', 'id' => 'smart_wp_integration_server_url',  'default' => '', 'desc' => 'nt https://sinudomeen.ee' ],
-                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'smart_wp_integtaion_license_text', 'default' => '', 'desc' => 'Kopeeri litsentsi lehelt' ],
-                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'smart_wp_integtaion_crypto_text',  'default' => '', 'desc' => '64-märgiline HEX' ],
-                [ 'type' => 'sectionend', 'id' => 'swi_conn' ],
+                [ 'type' => 'title', 'id' => 'swi_server' ],
+                [ 'name' => 'Vaheserveri URL', 'type' => 'text', 'id' => 'smart_wp_integration_server_url', 'default' => '', 'desc' => 'nt https://sinudomeen.ee — kehtib kõigile süsteemidele' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_server' ],
             ];
         }
+
+        // Alias for get_settings() compat
+        private function s_connection(): array { return $this->s_server_url(); }
 
         private function s_merit( array $s ): array {
             $client = new MeritServersDataClient();
@@ -55,6 +56,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             $dopts  = [ '' => '— vali osakond —' ];
             foreach ( $depts as $c ) { $dopts[$c] = $c; }
             return [
+                [ 'type' => 'title', 'id' => 'swi_merit_conn' ],
+                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'smart_wp_integtaion_license_text', 'default' => '', 'desc' => 'Merit Aktiva litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'smart_wp_integtaion_crypto_text',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_merit_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_merit' ],
                 [ 'name' => 'Luba Merit Aktiva',          'type' => 'checkbox', 'id' => 'smart_wp_integtaion_enable',         'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'smart_wp_integtaion_arve_eesliides', 'default' => 'WP' ],
@@ -76,6 +81,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
         private function s_simplebooks( array $s ): array {
             return [
+                [ 'type' => 'title', 'id' => 'swi_sb_conn' ],
+                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'swi_simplebooks_license_key', 'default' => '', 'desc' => 'Simplebooks litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_simplebooks_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_sb_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sb' ],
                 [ 'name' => 'Luba Simplebooks',           'type' => 'checkbox', 'id' => 'swi_simplebooks_enable',       'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_simplebooks_prefix',       'default' => 'SB' ],
@@ -86,6 +95,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
         private function s_smartaccounts( array $s ): array {
             return [
+                [ 'type' => 'title', 'id' => 'swi_sa_conn' ],
+                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'swi_smartaccounts_license_key', 'default' => '', 'desc' => 'Smart Accounts litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_smartaccounts_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_sa_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sa' ],
                 [ 'name' => 'Luba Smart Accounts',        'type' => 'checkbox', 'id' => 'swi_smartaccounts_enable',       'default' => 'no' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_smartaccounts_prefix',       'default' => 'SA' ],
@@ -262,6 +275,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 .swi-toggle-track.on .swi-toggle-thumb { left:20px; }
                 .swi-toggle-label { font-size:12.5px; color:#6b7280; }
                 .swi-toggle-track.on + .swi-toggle-label { color:var(--swi-brand); font-weight:600; }
+                /* WooCommerce default nav margin override */
+                body.woocommerce_page_wc-settings #mainform nav { margin: 0 !important; }
             </style>
 
             <div class="swi-frame">
