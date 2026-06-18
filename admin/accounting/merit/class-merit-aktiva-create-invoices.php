@@ -172,33 +172,20 @@ class My_Simple_Ajax_Plugin {
         $tax_total   = (float) $order->get_total_tax() + (float) $order->get_shipping_total();
         $grand_total = (float) $order->get_total();
 
+        $doc_date = $order->get_date_created()
+            ? $order->get_date_created()->date( 'Ymd' )
+            : gmdate( 'Ymd' );
+        $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
+
         return [
             'Customer'       => $customer,
-            'AccountingDoc'  => $this->AccountingDoc,
-            'DocDate'        => $order->get_date_created() ? $order->get_date_created()->date( 'YmdHis' ) : gmdate( 'YmdHis' ),
-            'DueDate'        => gmdate( 'YmdHis', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) ),
+            'AccountingDoc'  => 1,
+            'DocDate'        => $doc_date,
+            'DueDate'        => $due_date,
             'InvoiceNo'      => $this->arve_eesliides . $order->get_id(),
-            'DepartmentCode' => $this->department_code,
-            'RefNo'          => '0000',
-            'Country'        => [
-                'Code'    => $country ?: null,
-                'VatCode' => $vat_code,
-                'VatName' => $vat_name,
-                'Default' => (bool) $is_default_country,
-            ],
-            'Payment'        => [
-                'WcMethod'      => $wc_method,
-                'MeritAccount'  => $merit_account,
-                'Amount'        => $grand_total,
-                'Currency'      => $order->get_currency(),
-                'TransactionId' => $order->get_transaction_id(),
-            ],
+            'DepartmentCode' => $this->department_code ?: null,
+            'ReferenceNo'    => null,
             'InvoiceRow'     => $rows,
-            'Totals'         => [
-                'SubtotalEx' => round( $subtotal_ex, 2 ),
-                'TaxTotal'   => round( $tax_total, 2 ),
-                'GrandTotal' => round( $grand_total, 2 ),
-            ],
             'TaxAmount'      => [
                 [ 'TaxId' => $vat_code, 'Amount' => round( $tax_total, 2 ) ],
             ],
@@ -243,7 +230,7 @@ class My_Simple_Ajax_Plugin {
                 'Item'           => [
                     'Code'        => $sku,
                     'Description' => $item->get_name(),
-                    'Type'        => $this->arve_ridade_tyyp,
+                    'Type'        => (int) $this->arve_ridade_tyyp,
                     'UOMName'     => 'tk',
                 ],
                 'Quantity'       => (float) $item->get_quantity(),
