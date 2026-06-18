@@ -471,7 +471,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 n.style.cssText = 'position:fixed;top:32px;right:24px;z-index:99999;padding:12px 18px;border-radius:4px;font-size:13px;font-weight:500;max-width:360px;box-shadow:0 2px 8px rgba(0,0,0,.2);'
                     + (type === 'error' ? 'background:#b32d2e;color:#fff;' : 'background:#0a6b23;color:#fff;');
                 document.body.appendChild(n);
-                setTimeout(function(){ n.style.transition='opacity .4s'; n.style.opacity='0'; setTimeout(function(){ n.remove(); }, 400); }, 4000);
+                setTimeout(function(){ n.style.transition='opacity .4s'; n.style.opacity='0'; setTimeout(function(){ n.remove(); }, 400); }, 5000);
             }
 
             document.addEventListener('DOMContentLoaded', function() {
@@ -495,29 +495,23 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         }
                         var rows = resp.data.rows;
                         var missing = rows.filter(function(r){ return !r.in_merit; });
-                        var ok      = rows.filter(function(r){ return  r.in_merit; });
-                        var html = '<p style="margin:0 0 8px;"><strong>' + rows.length + '</strong> WC tellimust | '
-                            + '<span style="color:#0a6b23">✓ ' + ok.length + ' Meriti jõudnud</span> | '
-                            + '<span style="color:#b32d2e">✗ ' + missing.length + ' puudub Meritist</span></p>';
-                        if (rows.length === 0) {
-                            result.innerHTML = html + '<p>Tellimusi ei leitud.</p>';
+
+                        if (missing.length === 0) {
+                            result.innerHTML = '';
+                            swiNotify('Kõik arved on Merit Aktivaga sünkroniseeritud ✓', 'ok');
                             return;
                         }
+
+                        var html = '<p style="margin:0 0 8px;"><span style="color:#b32d2e"><strong>' + missing.length + ' arvet</strong> puudub Meritist</span></p>';
                         html += '<table class="widefat striped" style="max-width:860px;">'
-                            + '<thead><tr><th>Arve nr</th><th>Kuupäev</th><th>Summa</th><th>Merit</th><th>Saadetud</th><th></th></tr></thead><tbody>';
-                        rows.forEach(function(r) {
-                            var statusIcon = r.in_merit
-                                ? '<span style="color:#0a6b23">✓ Olemas</span>'
-                                : '<span style="color:#b32d2e">✗ Puudub</span>';
-                            var action = r.in_merit ? '' :
-                                '<button type="button" class="button button-small swi-resend-btn" data-id="' + r.order_id + '">Saada uuesti</button>';
+                            + '<thead><tr><th>Arve nr</th><th>Kuupäev</th><th>Summa</th><th>Saadetud</th><th></th></tr></thead><tbody>';
+                        missing.forEach(function(r) {
                             html += '<tr>'
                                 + '<td><a href="post.php?post=' + r.order_id + '&action=edit" target="_blank">' + r.invoice_no + '</a></td>'
                                 + '<td>' + r.date + '</td>'
                                 + '<td>' + r.total + '</td>'
-                                + '<td>' + statusIcon + '</td>'
                                 + '<td style="font-size:11px;color:#666">' + (r.meta_sent || '—') + '</td>'
-                                + '<td>' + action + '</td>'
+                                + '<td><button type="button" class="button button-small swi-resend-btn" data-id="' + r.order_id + '">Saada uuesti</button></td>'
                                 + '</tr>';
                         });
                         html += '</tbody></table>';
