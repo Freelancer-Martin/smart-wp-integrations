@@ -465,6 +465,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 var panel = document.getElementById('swi-panel-' + key);
                 if (panel) panel.classList.add('active');
             }
+            function swiNotify(msg, type) {
+                var n = document.createElement('div');
+                n.textContent = msg;
+                n.style.cssText = 'position:fixed;top:32px;right:24px;z-index:99999;padding:12px 18px;border-radius:4px;font-size:13px;font-weight:500;max-width:360px;box-shadow:0 2px 8px rgba(0,0,0,.2);'
+                    + (type === 'error' ? 'background:#b32d2e;color:#fff;' : 'background:#0a6b23;color:#fff;');
+                document.body.appendChild(n);
+                setTimeout(function(){ n.style.transition='opacity .4s'; n.style.opacity='0'; setTimeout(function(){ n.remove(); }, 400); }, 4000);
+            }
+
             document.addEventListener('DOMContentLoaded', function() {
                 var btn = document.getElementById('swi-sync-btn');
                 if (!btn) return;
@@ -530,10 +539,19 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     if (r2.success) {
                                         row.cells[3].innerHTML = '<span style="color:#0a6b23">✓ Saadetud</span>';
                                         row.cells[5].innerHTML = '';
+                                        swiNotify('Arve ' + orderId + ' edastatud Merit Aktivasse.', 'ok');
                                     } else {
-                                        self.textContent = 'Viga!';
+                                        self.textContent = 'Saada uuesti';
                                         self.disabled = false;
-                                        alert('Viga: ' + JSON.stringify(r2.data));
+                                        var d = r2.data || {};
+                                        var raw = (d.response && d.response.result && d.response.result.merit_message)
+                                            || (d.response && d.response.result && d.response.result.body)
+                                            || d.merit_message || d.message || '';
+                                        var friendly = raw
+                                            .replace('Korduv arve number.', 'Arve on Meriti juba olemas — kustuta see Meritist enne uuesti saatmist.')
+                                            .replace('Ridade summa ei võrdu arve summaga.', 'Arve summa ei klapi — kontrolli kaupade hindu WooCommerce-is.')
+                                            .trim() || 'Merit Aktiva tagastas vea. Vaata logifaili täpsema info saamiseks.';
+                                        swiNotify('Arve ' + orderId + ': ' + friendly, 'error');
                                     }
                                 });
                             });
