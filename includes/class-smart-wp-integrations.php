@@ -135,6 +135,11 @@ class Smart_Wp_Integrations {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/merit/class-merit-aktiva-get-data-from-merit-server.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/simplebooks/class-simplebooks-create-invoices.php';
+		if ( get_option( 'swi_simplebooks_enable' ) === 'yes' ) {
+			new SWI_Simplebooks_Create_Invoices();
+		}
+
 		
 
 		
