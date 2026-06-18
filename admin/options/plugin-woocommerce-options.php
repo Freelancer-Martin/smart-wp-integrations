@@ -10,6 +10,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         private $opt_shipping_map = 'smart_wp_integtaion_shipping_map';
         private $opt_tax_map      = 'smart_wp_integtaion_tax_map';
         private $opt_country_map  = 'smart_wp_integtaion_country_map';
+        private $merit_api_error  = null;
 
         public function __construct() {
             $this->id    = 'smart_wp_integration';
@@ -31,7 +32,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         public function get_settings( $section = '' ) {
             $order_statuses = function_exists('wc_get_order_statuses') ? wc_get_order_statuses() : [];
 
-            $client = new MeritServersDataClient();
+            $client      = new MeritServersDataClient();
+            $departments = [];
+            try {
+                $departments = $client->getDepartments() ?? [];
+            } catch ( \RuntimeException $e ) {
+                $this->merit_api_error = $e->getMessage();
+            }
 
             $settings = [
 
@@ -130,11 +137,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     'name'     => __( 'Vaikimisi osakond', 'smart-wp-integration' ),
                     'type'     => 'select',
                     'id'       => 'smart_wp_integtaion_deparment',
-                    'options'  => [
-                       implode(" ",$client->getDepartments()) => implode(" ",$client->getDepartments())
-                        
-                        
-                    ],
+                    'options'  => ! empty( $departments )
+                        ? [ implode( ' ', $departments ) => implode( ' ', $departments ) ]
+                        : [ '' => __( 'Osakondi ei leitud', 'smart-wp-integration' ) ],
                     'default'  => '',
                 ],
                 [
@@ -214,8 +219,75 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
          *  OUTPUT (ära loo oma <form>-i)
          * --------------------------- */
         public function output() {
+            // Trigger get_settings() early so $this->merit_api_error is populated before we render.
+            $settings = $this->get_settings();
             ?>
-            
+
+            <?php if ( $this->merit_api_error ) : ?>
+            <div id="swi-merit-error-popup" style="
+                position: fixed;
+                top: 72px;
+                right: 24px;
+                z-index: 99999;
+                max-width: 420px;
+                width: calc(100% - 48px);
+                background: #fff;
+                border-left: 5px solid #c0392b;
+                border-radius: 6px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+                padding: 20px 48px 20px 22px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                animation: swi-slide-in .25s ease;
+            ">
+                <!-- Close button -->
+                <button
+                    type="button"
+                    onclick="document.getElementById('swi-merit-error-popup').remove()"
+                    style="
+                        position: absolute;
+                        top: 10px;
+                        right: 12px;
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        font-size: 20px;
+                        line-height: 1;
+                        color: #888;
+                        padding: 0 4px;
+                    "
+                    aria-label="<?php esc_attr_e( 'Sulge', 'smart-wp-integration' ); ?>"
+                >&times;</button>
+
+                <!-- Header -->
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                         xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+                        <circle cx="12" cy="12" r="11" stroke="#c0392b" stroke-width="2"/>
+                        <path d="M12 7v5" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round"/>
+                        <circle cx="12" cy="16.5" r="1.2" fill="#c0392b"/>
+                    </svg>
+                    <strong style="font-size:15px; color:#1a1a2e;">
+                        <?php esc_html_e( 'Merit Aktiva – ühenduse viga', 'smart-wp-integration' ); ?>
+                    </strong>
+                </div>
+
+                <!-- Body -->
+                <p style="margin:0 0 8px; font-size:13.5px; color:#4a4a6a; line-height:1.6;">
+                    <?php esc_html_e( 'Serveriga ei õnnestunud ühendust luua. Palun proovige mõne hetke pärast uuesti.', 'smart-wp-integration' ); ?>
+                </p>
+                <p style="margin:0; font-size:12px; color:#888; word-break:break-all;">
+                    <strong><?php esc_html_e( 'Serveri vastus:', 'smart-wp-integration' ); ?></strong>
+                    <?php echo esc_html( $this->merit_api_error ); ?>
+                </p>
+            </div>
+            <style>
+                @keyframes swi-slide-in {
+                    from { opacity: 0; transform: translateX(30px); }
+                    to   { opacity: 1; transform: translateX(0); }
+                }
+            </style>
+            <?php endif; ?>
+
             <style>
                 .nav-pills .nav-link.active {background:#2271b1!important;}
                 .tab-content {border:1px solid #eee; padding:20px 16px; background:#fff; border-radius:0 0 8px 8px;}
@@ -280,8 +352,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <div class="tab-pane fade show active" id="pills-merit-aktiva" role="tabpanel" aria-labelledby="pills-merit-aktiva">  
                         
                           <?php
-                            woocommerce_admin_fields( $this->get_settings() );
-                           
+                            woocommerce_admin_fields( $settings );
                           ?>
                         
                     </div>
