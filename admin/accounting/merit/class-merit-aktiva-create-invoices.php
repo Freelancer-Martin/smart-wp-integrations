@@ -304,16 +304,19 @@ class My_Simple_Ajax_Plugin {
             ];
         }
 
+        $shipping_map = get_option( 'smart_wp_integtaion_shipping_map', [] );
         foreach ( $order->get_shipping_methods() as $shipping_item ) {
             $shipping_total = (float) $shipping_item->get_total();
             if ( $shipping_total <= 0 ) continue;
-            $ship_tax  = (float) $shipping_item->get_total_tax();
-            $ship_rate = $shipping_total > 0 ? round( $ship_tax / $shipping_total * 100, 2 ) : 0.0;
-            $tax_uuid  = $vat_code_override ?: $this->resolve_vat_uuid( $ship_rate );
+            $ship_tax    = (float) $shipping_item->get_total_tax();
+            $ship_rate   = $shipping_total > 0 ? round( $ship_tax / $shipping_total * 100, 2 ) : 0.0;
+            $tax_uuid    = $vat_code_override ?: $this->resolve_vat_uuid( $ship_rate );
+            $method_id   = $shipping_item->get_method_id();
+            $ship_code   = ! empty( $shipping_map[ $method_id ] ) ? substr( $shipping_map[ $method_id ], 0, 20 ) : 'TRANSPORT';
 
             $payload_arrays[] = [
                 'Item'           => [
-                    'Code'        => 'TRANSPORT',
+                    'Code'        => $ship_code,
                     'Description' => $shipping_item->get_name(),
                     'Type'        => 1,
                     'UOMName'     => 'tk',
