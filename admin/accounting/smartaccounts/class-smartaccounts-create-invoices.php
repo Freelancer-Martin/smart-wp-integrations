@@ -60,9 +60,9 @@ class SWI_SmartAccounts_Create_Invoices {
         return $new;
     }
 
-    public function render_order_column( string $column, int $order_id ): void {
+    public function render_order_column( string $column, $order_or_id ): void {
         if ( $column !== 'swi_smartaccounts' ) return;
-        $order = wc_get_order( $order_id );
+        $order = is_a( $order_or_id, 'WC_Order' ) ? $order_or_id : wc_get_order( (int) $order_or_id );
         if ( ! $order ) return;
         $sent  = $order->get_meta( '_swi_sent_smartaccounts' );
         $retry = (int) $order->get_meta( '_swi_smartaccounts_retry_count' );
