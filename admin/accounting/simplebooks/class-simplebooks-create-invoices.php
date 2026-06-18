@@ -252,14 +252,8 @@ class SWI_Simplebooks_Create_Invoices {
         }
 
         $status = ltrim( get_option( 'swi_simplebooks_order_status', 'wc-completed' ), 'wc-' );
-        $orders = wc_get_orders( [
-            'status' => $status,
-            'limit'  => 50,
-            'meta_query' => [ [
-                'key'     => '_swi_sent_simplebooks',
-                'compare' => 'NOT EXISTS',
-            ] ],
-        ] );
+        $all    = wc_get_orders( [ 'status' => $status, 'limit' => 200 ] );
+        $orders = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_simplebooks' ) ), 0, 50 );
 
         if ( empty( $orders ) ) {
             wp_send_json_success( [ 'sent' => 0, 'failed' => 0, 'total' => 0, 'message' => 'Kõik arved on juba saadetud.' ] );

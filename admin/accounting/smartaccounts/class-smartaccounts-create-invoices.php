@@ -399,11 +399,9 @@ class SWI_SmartAccounts_Create_Invoices {
         }
 
         $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $orders  = wc_get_orders( [
-            'limit'      => 50,
-            'status'     => ltrim( $status, 'wc-' ),
-            'meta_query' => [ [ 'key' => '_swi_sent_smartaccounts', 'compare' => 'NOT EXISTS' ] ],
-        ] );
+        $all     = wc_get_orders( [ 'limit' => 200, 'status' => ltrim( $status, 'wc-' ) ] );
+        $orders  = array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) );
+        $orders  = array_slice( $orders, 0, 50 );
 
         $sent = 0; $failed = 0; $errors = [];
 
