@@ -190,14 +190,21 @@ class My_Simple_Ajax_Plugin {
         }
         $total_amount = round( $total_amount, 2 );
 
-        // TaxAmount grupeerituna UUID järgi
+        // TaxAmount — grupeeri UUID järgi kasutades toote-taseme tax väärtusi
         $tax_by_uuid = [];
-        foreach ( $order->get_items( 'tax' ) as $tax_item ) {
-            $rate_id  = $tax_item->get_rate_id();
-            $rate_pct = (float) \WC_Tax::get_rate_percent( $rate_id );
-            $uuid     = $vat_code ?: $this->resolve_vat_uuid( $rate_pct );
-            $amount   = round( (float) $tax_item->get_tax_total() + (float) $tax_item->get_shipping_tax_total(), 2 );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $amount;
+        foreach ( $order->get_items() as $item ) {
+            $item_tax = round( (float) $item->get_total_tax(), 2 );
+            if ( $item_tax <= 0 ) continue;
+            $uuid = $vat_code ?: $this->resolve_vat_uuid( $this->item_tax_rate( $item ) );
+            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $item_tax;
+        }
+        foreach ( $order->get_shipping_methods() as $shipping_item ) {
+            $ship_tax = round( (float) $shipping_item->get_total_tax(), 2 );
+            if ( $ship_tax <= 0 ) continue;
+            $ship_total = (float) $shipping_item->get_total();
+            $ship_rate  = $ship_total > 0 ? round( $ship_tax / $ship_total * 100, 2 ) : 0.0;
+            $uuid = $vat_code ?: $this->resolve_vat_uuid( $ship_rate );
+            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $ship_tax;
         }
         if ( empty( array_filter( $tax_by_uuid ) ) ) {
             $tax_by_uuid[ $vat_code ?: $this->tax_field ] = round( (float) $order->get_total_tax(), 2 );
