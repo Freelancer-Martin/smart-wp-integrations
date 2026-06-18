@@ -1,114 +1,121 @@
-=== Plugin Name ===
-Contributors: (this should be a list of wordpress.org userid's)
+=== Smart WP Integrations ===
+Contributors: freelancermartin
 Donate link: https://freelancermartin.com/
-Tags: comments, spam
-Requires at least: 3.0.1
-Tested up to: 3.4
-Stable tag: 4.3
+Tags: woocommerce, merit aktiva, simplebooks, arved, raamatupidamine, eesti
+Requires at least: 6.0
+Tested up to: 6.7
+Requires PHP: 8.1
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Here is a short description of the plugin.  This should be no more than 150 characters.  No markup here.
+Ühendab WooCommerce tellimused automaatselt Merit Aktiva ja Simplebooks raamatupidamistarkvaraga.
 
 == Description ==
 
-This is the long description.  No limit, and you can use Markdown (as well as in the following sections).
+**Smart WP Integrations** on WooCommerce laiendus, mis edastab tellimused automaatselt Eesti raamatupidamistarkvaradesse. Plugin töötab läbi turvalise vaheserveri (Laravel), mis krüpteerib andmed ja haldab API ühendusi.
 
-For backwards compatibility, if this section is missing, the full length of the short description will be used, and
-Markdown parsed.
+= Toetatud integratsioonid =
 
-A few notes about the sections above:
+* **Merit Aktiva** – arvete automaatne loomine, maksude kaardistus, osakondade tugi, sünkroniseerimise kontroll
+* **Simplebooks** – arvete ja klientide automaatne loomine
+* **Smart Accounts** – arvete edastamine (konfigureeriv)
 
-*   "Contributors" is a comma separated list of wp.org/wp-plugins.org usernames
-*   "Tags" is a comma separated list of tags that apply to the plugin
-*   "Requires at least" is the lowest version that the plugin will work on
-*   "Tested up to" is the highest version that you've *successfully used to test the plugin*. Note that it might work on
-higher versions... this is just the highest one you've verified.
-*   Stable tag should indicate the Subversion "tag" of the latest stable version, or "trunk," if you use `/trunk/` for
-stable.
+= Peamised funktsioonid =
 
-    Note that the `readme.txt` of the stable tag is the one that is considered the defining one for the plugin, so
-if the `/trunk/readme.txt` file says that the stable tag is `4.3`, then it is `/tags/4.3/readme.txt` that'll be used
-for displaying information about the plugin.  In this situation, the only thing considered from the trunk `readme.txt`
-is the stable tag pointer.  Thus, if you develop in trunk, you can update the trunk `readme.txt` to reflect changes in
-your in-development version, without having that information incorrectly disclosed about the current stable version
-that lacks those changes -- as long as the trunk's `readme.txt` points to the correct stable tag.
+* Arved luuakse automaatselt kui tellimus jõuab valitud staatusesse (nt "Lõpetatud")
+* Kõik andmed krüpteeritakse AES-256-GCM-iga enne vaheserverisse saatmist
+* Maksude kaardistus: igale WooCommerce käibemaksumäärale vastav Merit/Simplebooks VAT kood
+* Tarneviiside kaardistus: WooCommerce tarnemeetod → raamatupidamissüsteemi artikkel
+* Kategooria → osakond kaardistus (Merit Aktiva)
+* Ebaõnnestunud arvete automaatne uuesti saatmine (max 3 katset)
+* Saatmise ajalugu (viimased 50 saatmist) leheküljestusega
+* Seadete eksport/import JSON formaadis
+* E-maili teavitus kui arve saatmine ebaõnnestub
+* Sünkroniseerimise kontroll: võrdleb WooCommerce tellimusi raamatupidamissüsteemis olevate arvetega
+* Täielik HPOS (High Performance Order Storage) tugi
 
-    If no stable tag is provided, it is assumed that trunk is stable, but you should specify "trunk" if that's where
-you put the stable version, in order to eliminate any doubt.
+= Nõuded =
+
+* WordPress 6.0+
+* WooCommerce 7.0+
+* PHP 8.1+
+* Aktiivne litsents vaheserveris (https://wp-liides.freelancermartin.ee)
+* Merit Aktiva või Simplebooks konto koos API ligipääsuga
+
+= Kuidas töötab =
+
+1. Plugin kogub WooCommerce tellimusandmed
+2. Andmed krüpteeritakse AES-256-GCM algoritmiga (võti on unikaalne igale litsentsile)
+3. Krüpteeritud pakett saadetakse vaheserverisse koos litsentsivõtmega
+4. Vaheserver dekrüpteerib, valideerib litsentsi ja edastab andmed valitud raamatupidamissüsteemi API-le
+5. Arve luuakse automaatselt raamatupidamistarkvaras
 
 == Installation ==
 
-This section describes how to install the plugin and get it working.
-
-e.g.
-
-1. Upload `smart-wp-integrations.php` to the `/wp-content/plugins/` directory
-1. Activate the plugin through the 'Plugins' menu in WordPress
-1. Place `<?php do_action('plugin_name_hook'); ?>` in your templates
+1. Laadi plugin alla ja paki lahti kausta `/wp-content/plugins/smart-wp-integrations/`
+   või installi otse WordPress admin paneeli kaudu
+2. Aktiveeri plugin menüüst **Pluginad**
+3. Ava **WooCommerce → Seaded → Smart WP Integrations**
+4. Lisa litsentsivõti ja krüptovõti (saad need vaheserveri litsentsileheküljelt)
+5. Seadista Merit Aktiva või Simplebooks API võtmed vaheserveris: **Litsentsid → Seadista**
+6. Lülita soovitud integratsioon sisse ja vali tellimuse staatus, millal arve luuakse
 
 == Frequently Asked Questions ==
 
-= A question that someone might have =
+= Kust saan litsentsi- ja krüptovõtme? =
 
-An answer to that question.
+Loo konto aadressil https://wp-liides.freelancermartin.ee, vali toode (Merit Aktiva moodul, Simplebooks moodul vms) ja tee makse. Pärast makse kinnitust kuvatakse litsentsivõti ja krüptovõti litsentsileheküljel.
 
-= What about foo bar? =
+= Kas plugin saadab andmeid otse Merit Aktiva serverisse? =
 
-Answer to foo bar dilemma.
+Ei. Kõik andmed liiguvad läbi turvalise vaheserveri, mis valideerib litsentsi ja krüpteerib ühenduse. Plugin ise ei ühenda kunagi Merit Aktiva ega Simplebooks API-ga otse.
+
+= Mis juhtub kui arve saatmine ebaõnnestub? =
+
+Plugin märgib tellimuse uuesti saatmiseks (retry). Kordussaatmist proobitakse kuni 3 korda tunni tagant. Kui kõik katsed ebaõnnestuvad, saadetakse (valikul) e-mail administraatorile. Kõik saatmiskatsed on nähtavad **Tööriistad → Saatmise ajalugu** all.
+
+= Kas "Korduv arve number" viga on tõsine? =
+
+Ei – see tähendab et arve on raamatupidamissüsteemis juba olemas. Plugin tuvastab selle automaatselt ja märgib tellimuse saadetuna ilma uuesti proovimata.
+
+= Kuidas toimib maksude kaardistus? =
+
+Merit Aktiva → **Maksude kaardistus** paneelis saad igale WooCommerce käibemaksumäärale (nt 20%, 9%, 0%) määrata Merit Aktiva VAT UUID. Kui kaardistus puudub, kasutatakse üldseadetes valitud vaikimisi maksumäära.
+
+= Toetab plugin WooCommerce HPOS-i? =
+
+Jah, täielik HPOS (High Performance Order Storage) tugi alates v1.0.0. Plugin kasutab `$order->get_meta()` / `$order->update_meta_data()` API-t.
+
+= Kuidas eksportida seadeid ühelt saidilt teisele? =
+
+Ava **Tööriistad** paneel ja klõpsa **Ekspordi seaded** – saad JSON faili. Teisel saidil ava sama paneel ja kasuta **Impordi seaded**.
 
 == Screenshots ==
 
-1. This screen shot description corresponds to screenshot-1.(png|jpg|jpeg|gif). Note that the screenshot is taken from
-the /assets directory or the directory that contains the stable readme.txt (tags or trunk). Screenshots in the /assets
-directory take precedence. For example, `/assets/screenshot-1.png` would win over `/tags/4.3/screenshot-1.png`
-(or jpg, jpeg, gif).
-2. This is the second screen shot
+1. Merit Aktiva üldseaded – litsentsi seadistus, arve eesliide, maksetähtaeg
+2. Maksude kaardistus – WooCommerce maksumäär → Merit Aktiva VAT UUID
+3. Tarneviiside kaardistus – tarnemeetod → raamatupidamise artikkel
+4. Sünkroniseerimise kontroll – võrdleb WooCommerce tellimusi Merit arvetega
+5. Saatmise ajalugu – viimased 50 saatmist leheküljestusega
+6. Tööriistad – seadete eksport/import
 
 == Changelog ==
 
-= 1.0 =
-* A change since the previous version.
-* Another change.
-
-= 0.5 =
-* List versions from most recent at top to oldest at bottom.
+= 1.0.0 =
+* Esialgne väljalase
+* Merit Aktiva integratsioon: automaatne arve loomine, retry loogika, sünk kontroll
+* Simplebooks integratsioon: automaatne arve ja kliendi loomine
+* AES-256-GCM krüpteering kõikide andmete edastamisel
+* HPOS tugi (wp_wc_orders_meta)
+* Maksude kaardistus UUID-põhiselt
+* Tarneviiside kaardistus
+* Kategooria → osakond kaardistus (Merit Aktiva)
+* Saatmise ajalugu koos leheküljestusega
+* Seadete eksport/import
+* E-maili teavitused ebaõnnestunud saatmistel
 
 == Upgrade Notice ==
 
-= 1.0 =
-Upgrade notices describe the reason a user should upgrade.  No more than 300 characters.
-
-= 0.5 =
-This version fixes a security related bug.  Upgrade immediately.
-
-== Arbitrary section ==
-
-You may provide arbitrary sections, in the same format as the ones above.  This may be of use for extremely complicated
-plugins where more information needs to be conveyed that doesn't fit into the categories of "description" or
-"installation."  Arbitrary sections will be shown below the built-in sections outlined above.
-
-== A brief Markdown Example ==
-
-Ordered list:
-
-1. Some feature
-1. Another feature
-1. Something else about the plugin
-
-Unordered list:
-
-* something
-* something else
-* third thing
-
-Here's a link to [WordPress](http://wordpress.org/ "Your favorite software") and one to [Markdown's Syntax Documentation][markdown syntax].
-Titles are optional, naturally.
-
-[markdown syntax]: http://daringfireball.net/projects/markdown/syntax
-            "Markdown is what the parser uses to process much of the readme file"
-
-Markdown uses email style notation for blockquotes and I've been told:
-> Asterisks for *emphasis*. Double it up  for **strong**.
-
-`<?php code(); // goes in backticks ?>`
+= 1.0.0 =
+Esimene stabiilne väljalase. HPOS-ühilduvus tagatud.
