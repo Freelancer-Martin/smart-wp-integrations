@@ -97,6 +97,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
         private function s_smartaccounts( array $s ): array {
             return [
+                [ 'type' => 'title', 'id' => 'swi_sa_conn' ],
+                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'swi_smartaccounts_license_key', 'default' => '', 'desc' => 'Smart Accounts litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_smartaccounts_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_sa_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sa' ],
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_smartaccounts_prefix',        'default' => 'SA' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_smartaccounts_order_status',  'options' => $s, 'default' => 'wc-completed' ],
