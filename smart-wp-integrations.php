@@ -70,6 +70,23 @@ register_deactivation_hook( __FILE__, function () {
 
 add_action( 'swi_retry_failed_orders', 'swi_do_retry_failed_orders' );
 
+// Ühekorraline HPOS migratsioon: kopeeri _swi_* meta wp_postmeta → wp_wc_orders_meta
+add_action( 'admin_init', function () {
+	if ( get_option( 'swi_hpos_meta_migrated' ) ) {
+		return;
+	}
+	global $wpdb;
+	$wpdb->query( "
+		INSERT INTO {$wpdb->prefix}wc_orders_meta (order_id, meta_key, meta_value)
+		SELECT p.post_id, p.meta_key, p.meta_value
+		FROM {$wpdb->postmeta} p
+		INNER JOIN {$wpdb->prefix}wc_orders o ON o.id = p.post_id
+		WHERE p.meta_key IN ('_swi_sent_merit','_swi_merit_retry','_swi_merit_retry_count')
+		ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value)
+	" );
+	update_option( 'swi_hpos_meta_migrated', '1' );
+} );
+
 /**
  * Cron callback: saada uuesti ebaõnnestunud orderid (max 3 katset).
  */
