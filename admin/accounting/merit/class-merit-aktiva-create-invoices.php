@@ -151,21 +151,28 @@ class My_Simple_Ajax_Plugin {
 
         $customer = [
             'Name'            => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
-            'RegNo'           => $is_company ? $this->regNo : null,
-            'NotTDCustomer'   => false,
-            'VatRegNo'        => '00000000',
+            'NotTDCustomer'   => ! $is_company,
             'CurrencyCode'    => $order->get_currency(),
             'PaymentDeadLine' => (int) $this->payment_deadline,
             'OverDueCharge'   => 0,
-            'RefNoBase'       => 1,
             'Address'         => $order->get_billing_address_1(),
-            'CountryCode'     => $order->get_billing_country(),
-            'County'          => $order->get_shipping_state(),
+            'CountryCode'     => $order->get_billing_country() ?: 'EE',
             'City'            => $order->get_billing_city(),
-            'PostalCode'      => $order->get_shipping_postcode(),
-            'PhoneNo'         => $order->get_billing_phone(),
+            'PostalCode'      => $order->get_billing_postcode(),
             'Email'           => $order->get_billing_email(),
         ];
+        if ( $is_company ) {
+            $customer['RegNo']    = $this->regNo ?: '';
+            $customer['VatRegNo'] = '';
+        }
+        $phone = $order->get_billing_phone();
+        if ( $phone ) {
+            $customer['PhoneNo'] = substr( $phone, 0, 20 );
+        }
+        $county = $order->get_billing_state();
+        if ( $county ) {
+            $customer['County'] = $county;
+        }
 
         $rows     = $this->create_invoice_items_array( $order, $vat_code );
         $tax_paid = round( (float) $order->get_total_tax(), 2 );
@@ -176,15 +183,16 @@ class My_Simple_Ajax_Plugin {
         $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
 
         $payload = [
-            'Customer'       => $customer,
-            'AccountingDoc'  => 1,
-            'DocDate'        => $doc_date,
-            'DueDate'        => $due_date,
-            'InvoiceNo'      => $this->arve_eesliides . $order->get_id(),
-            'DepartmentCode' => $this->department_code ?: null,
-            'ReferenceNo'    => null,
-            'InvoiceRow'     => $rows,
+            'Customer'      => $customer,
+            'AccountingDoc' => 1,
+            'DocDate'       => $doc_date,
+            'DueDate'       => $due_date,
+            'InvoiceNo'     => $this->arve_eesliides . $order->get_id(),
+            'InvoiceRow'    => $rows,
         ];
+        if ( $this->department_code ) {
+            $payload['DepartmentCode'] = $this->department_code;
+        }
 
         // Lisa TaxAmount ainult siis kui WC on maksu tegelikult arvutanud.
         // Kui tax_paid = 0 aga TaxId on 22%, jätame Merit ise arvutada.
