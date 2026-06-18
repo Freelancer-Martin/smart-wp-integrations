@@ -250,7 +250,7 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $vat_code_override ?: $this->tax_field,
-                'LocationCode'   => '1',
+                'LocationCode'   => '',
             ];
         }
 
@@ -269,7 +269,7 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $vat_code_override ?: $this->tax_field,
-                'LocationCode'   => '1',
+                'LocationCode'   => '',
             ];
         }
 
