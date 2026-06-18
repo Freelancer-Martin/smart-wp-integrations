@@ -699,24 +699,36 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         }
 
         public function field_tax_map( $value ) {
-            $key = $value['id'];
-            $stored = (array)get_option($key,['std20'=>['id'=>'20','rate'=>'20','name'=>'20%','is_default'=>''],'zero'=>['id'=>'0','rate'=>'0','name'=>'0%','is_default'=>'yes']]);
-            echo '<table class="widefat" style="margin:0;"><thead><tr><th>Maksu ID</th><th>%</th><th>Nimetus</th><th>Vaikimisi?</th></tr></thead><tbody>';
-            foreach ($stored as $k => $row) {
-                if (str_starts_with((string)$k,'_')) continue;
-                $rk = esc_attr($k);
-                echo '<tr>';
-                printf('<td><input type="text" name="%1$s[%2$s][id]" value="%3$s"></td>',esc_attr($key),$rk,esc_attr($row['id']??''));
-                printf('<td><input type="text" name="%1$s[%2$s][rate]" value="%3$s"></td>',esc_attr($key),$rk,esc_attr($row['rate']??''));
-                printf('<td><input type="text" name="%1$s[%2$s][name]" value="%3$s"></td>',esc_attr($key),$rk,esc_attr($row['name']??''));
-                echo '<td><select name="'.esc_attr($key).'['.$rk.'][is_default]"><option value="">Ei</option><option value="yes" '.selected(($row['is_default']??'')==='yes',true,false).'>Jah</option></select></td></tr>';
+            $key    = $value['id'];
+            $stored = (array) get_option( $key, [
+                'r24' => [ 'rate' => '24', 'uuid' => '1e420e04-3dd7-46a5-b71f-0490779c2638', 'is_default' => '' ],
+                'r9'  => [ 'rate' => '9',  'uuid' => '6b618baa-680b-4606-9ad9-eff0beb27344', 'is_default' => '' ],
+                'r0'  => [ 'rate' => '0',  'uuid' => '973a4395-665f-47a6-a5b6-5384dd24f8d0', 'is_default' => 'yes' ],
+            ] );
+            echo '<p style="margin:0 0 8px;color:#666;font-size:12px;">Seo WooCommerce käibemaksumäär (%) Merit UUID-ga. Vaikimisi kasutatakse kui toote määr kaardistusest puudub.</p>';
+            echo '<table class="widefat" style="margin:0;"><thead><tr><th style="width:80px">Määr (%)</th><th>Merit VAT UUID</th><th style="width:90px">Vaikimisi?</th><th style="width:40px"></th></tr></thead><tbody>';
+            foreach ( $stored as $k => $row ) {
+                if ( str_starts_with( (string) $k, '_' ) ) continue;
+                $rk = esc_attr( $k );
+                printf(
+                    '<tr><td><input type="number" name="%1$s[%2$s][rate]" value="%3$s" style="width:70px" min="0" max="100"></td>'
+                    . '<td><input type="text" name="%1$s[%2$s][uuid]" value="%4$s" style="width:100%%" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></td>'
+                    . '<td><select name="%1$s[%2$s][is_default]"><option value="">Ei</option><option value="yes" %5$s>Jah</option></select></td>'
+                    . '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px" title="Kustuta">✕</button></td></tr>',
+                    esc_attr( $key ), $rk,
+                    esc_attr( $row['rate'] ?? '' ),
+                    esc_attr( $row['uuid'] ?? '' ),
+                    selected( ( $row['is_default'] ?? '' ) === 'yes', true, false )
+                );
             }
-            $new = uniqid('n_');
-            echo '<tr>';
-            printf('<td><input type="text" name="%1$s[%2$s][id]" value=""></td>',esc_attr($key),esc_attr($new));
-            printf('<td><input type="text" name="%1$s[%2$s][rate]" value=""></td>',esc_attr($key),esc_attr($new));
-            printf('<td><input type="text" name="%1$s[%2$s][name]" value=""></td>',esc_attr($key),esc_attr($new));
-            echo '<td><select name="'.esc_attr($key).'['.esc_attr($new).'][is_default]"><option value="">Ei</option><option value="yes">Jah</option></select></td></tr>';
+            $new = uniqid( 'r_' );
+            printf(
+                '<tr><td><input type="number" name="%1$s[%2$s][rate]" value="" style="width:70px" min="0" max="100" placeholder="nt 24"></td>'
+                . '<td><input type="text" name="%1$s[%2$s][uuid]" value="" style="width:100%%" placeholder="Merit UUID"></td>'
+                . '<td><select name="%1$s[%2$s][is_default]"><option value="">Ei</option><option value="yes">Jah</option></select></td>'
+                . '<td></td></tr>',
+                esc_attr( $key ), esc_attr( $new )
+            );
             echo '</tbody></table>';
         }
 

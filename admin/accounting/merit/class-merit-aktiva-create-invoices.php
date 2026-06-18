@@ -183,13 +183,29 @@ class My_Simple_Ajax_Plugin {
 
         $rows = $this->create_invoice_items_array( $order, $vat_code );
 
-        // TotalAmount = ridade summa ilma maksuta (Merit nõuab valideerimiseks)
+        // TotalAmount = ridade summa ilma maksuta
         $total_amount = 0.0;
         foreach ( $rows as $row ) {
             $total_amount += (float) $row['Price'] * (float) $row['Quantity'];
         }
         $total_amount = round( $total_amount, 2 );
-        $tax_paid     = round( (float) $order->get_total_tax(), 2 );
+
+        // TaxAmount grupeerituna UUID järgi
+        $tax_by_uuid = [];
+        foreach ( $order->get_items( 'tax' ) as $tax_item ) {
+            $rate_id  = $tax_item->get_rate_id();
+            $rate_pct = (float) \WC_Tax::get_rate_percent( $rate_id );
+            $uuid     = $vat_code ?: $this->resolve_vat_uuid( $rate_pct );
+            $amount   = round( (float) $tax_item->get_tax_total() + (float) $tax_item->get_shipping_tax_total(), 2 );
+            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $amount;
+        }
+        if ( empty( array_filter( $tax_by_uuid ) ) ) {
+            $tax_by_uuid[ $vat_code ?: $this->tax_field ] = round( (float) $order->get_total_tax(), 2 );
+        }
+        $tax_amount_arr = [];
+        foreach ( $tax_by_uuid as $uuid => $amount ) {
+            $tax_amount_arr[] = [ 'TaxId' => $uuid, 'Amount' => round( $amount, 2 ) ];
+        }
 
         $doc_date = $order->get_date_created()
             ? $order->get_date_created()->date( 'Ymd' )
@@ -205,9 +221,7 @@ class My_Simple_Ajax_Plugin {
             'InvoiceRow'     => $rows,
             'TotalAmount'    => $total_amount,
             'RoundingAmount' => 0.0,
-            'TaxAmount'      => [
-                [ 'TaxId' => $vat_code, 'Amount' => $tax_paid ],
-            ],
+            'TaxAmount'      => $tax_amount_arr,
         ];
 
         if ( ! empty( $merit_account ) ) {
@@ -241,6 +255,29 @@ class My_Simple_Ajax_Plugin {
         return $invoiceArray;
     }
 
+    private function resolve_vat_uuid( float $rate_pct ): string {
+        $tax_map      = get_option( 'smart_wp_integtaion_tax_map', [] );
+        $default_uuid = $this->tax_field;
+        foreach ( $tax_map as $row ) {
+            if ( ! empty( $row['is_default'] ) && $row['is_default'] === 'yes' && ! empty( $row['uuid'] ) ) {
+                $default_uuid = $row['uuid'];
+            }
+        }
+        foreach ( $tax_map as $row ) {
+            if ( isset( $row['rate'] ) && abs( (float) $row['rate'] - $rate_pct ) < 0.01 && ! empty( $row['uuid'] ) ) {
+                return $row['uuid'];
+            }
+        }
+        return $default_uuid;
+    }
+
+    private function item_tax_rate( \WC_Order_Item_Product $item ): float {
+        $total     = (float) $item->get_total();
+        $total_tax = (float) $item->get_total_tax();
+        if ( $total <= 0 ) return 0.0;
+        return round( $total_tax / $total * 100, 2 );
+    }
+
     public function create_invoice_items_array( \WC_Order $order, ?string $vat_code_override = null ): array {
         $payload_arrays = [];
 
@@ -249,6 +286,7 @@ class My_Simple_Ajax_Plugin {
             $sku      = $product ? $product->get_sku() : '';
             $qty      = max( 1, (int) $item->get_quantity() );
             $price_ex = round( (float) $item->get_total() / $qty, 4 );
+            $tax_uuid = $vat_code_override ?: $this->resolve_vat_uuid( $this->item_tax_rate( $item ) );
 
             $payload_arrays[] = [
                 'Item'           => [
@@ -261,7 +299,7 @@ class My_Simple_Ajax_Plugin {
                 'Price'          => $price_ex,
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
-                'TaxId'          => $vat_code_override ?: $this->tax_field,
+                'TaxId'          => $tax_uuid,
                 'LocationCode'   => '1',
             ];
         }
@@ -269,6 +307,10 @@ class My_Simple_Ajax_Plugin {
         foreach ( $order->get_shipping_methods() as $shipping_item ) {
             $shipping_total = (float) $shipping_item->get_total();
             if ( $shipping_total <= 0 ) continue;
+            $ship_tax  = (float) $shipping_item->get_total_tax();
+            $ship_rate = $shipping_total > 0 ? round( $ship_tax / $shipping_total * 100, 2 ) : 0.0;
+            $tax_uuid  = $vat_code_override ?: $this->resolve_vat_uuid( $ship_rate );
+
             $payload_arrays[] = [
                 'Item'           => [
                     'Code'        => 'TRANSPORT',
@@ -280,7 +322,7 @@ class My_Simple_Ajax_Plugin {
                 'Price'          => $shipping_total,
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
-                'TaxId'          => $vat_code_override ?: $this->tax_field,
+                'TaxId'          => $tax_uuid,
                 'LocationCode'   => '1',
             ];
         }
