@@ -252,6 +252,81 @@ function swi_do_retry_failed_orders(): void {
 }
 
 /**
+ * Cron callback: proovi ebaõnnestunud Simplebooks ordereid automaatselt uuesti saata.
+ *
+ * Töötab samas cron-sündmuses Merit retry-ga ('swi_retry_failed_orders').
+ * Paralleelsed retry-tsüklid oleks keerulisemad hallata ja ühe 10-minutilise
+ * tsükli koormus on piisavalt väike mõlema süsteemi jaoks.
+ */
+function swi_do_simplebooks_retry(): void {
+	if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) {
+		return;
+	}
+
+	if ( ! class_exists( 'LocalApiClient' ) || ! class_exists( 'SWI_Simplebooks_Create_Invoices' ) ) {
+		return;
+	}
+
+	$orders = wc_get_orders( [
+		'limit'      => 20,
+		'meta_key'   => '_swi_simplebooks_retry',
+		'meta_value' => '1',
+	] );
+
+	if ( empty( $orders ) ) {
+		return;
+	}
+
+	$handler = new SWI_Simplebooks_Create_Invoices();
+
+	foreach ( $orders as $order ) {
+		$order_id = $order->get_id();
+		$count    = (int) $order->get_meta( '_swi_simplebooks_retry_count' );
+
+		if ( $count >= 3 ) {
+			$order->delete_meta_data( '_swi_simplebooks_retry' );
+			$order->delete_meta_data( '_swi_simplebooks_retry_count' );
+			$order->save();
+			continue;
+		}
+
+		if ( $order->get_meta( '_swi_sent_simplebooks' ) ) {
+			$order->delete_meta_data( '_swi_simplebooks_retry' );
+			$order->delete_meta_data( '_swi_simplebooks_retry_count' );
+			$order->save();
+			continue;
+		}
+
+		$payload = $handler->build_payload( $order );
+		if ( ! $payload ) {
+			continue;
+		}
+
+		$res = LocalApiClient::sendEncryptedOrder( $payload, 'simplebooks' );
+
+		if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+			$order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+			$order->delete_meta_data( '_swi_simplebooks_retry' );
+			$order->delete_meta_data( '_swi_simplebooks_retry_count' );
+			$order->save();
+			$order->add_order_note( 'Simplebooks: arve edastatud automaatse uuesti saatmisega (katse ' . ( $count + 1 ) . ').' );
+			if ( function_exists( 'swi_sb_log_send_history' ) ) {
+				swi_sb_log_send_history( $order_id, 'ok', 'Automaatne uuesti saatmine õnnestus (katse ' . ( $count + 1 ) . ')' );
+			}
+		} else {
+			$msg = $res['message'] ?? wp_json_encode( $res );
+			$order->update_meta_data( '_swi_simplebooks_retry_count', $count + 1 );
+			$order->save();
+			$order->add_order_note( 'Simplebooks: automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ') — ' . $msg );
+			if ( function_exists( 'swi_sb_log_send_history' ) ) {
+				swi_sb_log_send_history( $order_id, 'error', 'Automaatne uuesti saatmine ebaõnnestus katse ' . ( $count + 1 ) . ': ' . $msg );
+			}
+		}
+	}
+}
+add_action( 'swi_retry_failed_orders', 'swi_do_simplebooks_retry' );
+
+/**
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.
  */

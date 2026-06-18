@@ -88,8 +88,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_simplebooks_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sb_conn' ],
                 [ 'type' => 'title', 'id' => 'swi_sb' ],
-                [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_simplebooks_prefix',       'default' => 'SB' ],
-                [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_simplebooks_order_status', 'options' => $s, 'default' => 'wc-completed' ],
+                [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'swi_simplebooks_prefix',        'default' => 'SB' ],
+                [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'swi_simplebooks_order_status',  'options' => $s, 'default' => 'wc-completed' ],
+                [ 'name' => 'Maksetähtaeg (päevades)',    'type' => 'number',   'id' => 'swi_simplebooks_payment_days',  'default' => '14', 'desc' => 'Mitu päeva on kliendil arve tasumiseks' ],
                 [ 'type' => 'sectionend', 'id' => 'swi_sb' ],
             ];
         }
@@ -643,11 +644,25 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 <div class="swi-tabview" id="swi-tab-simplebooks">
                     <nav class="swi-sidebar">
                         <div class="swi-sidebar-label">Simplebooks</div>
-                        <div class="swi-nav-item active" data-panel="sb-general" onclick="swiPanel('sb-general', this, 'simplebooks')">
-                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        <?php
+                        $sb_nav = [
+                            ['key'=>'sb-general',  'icon'=>'⚙',  'label'=>'Üldseaded'],
+                            ['key'=>'sb-history',  'icon'=>'📋', 'label'=>'Saatmise ajalugu'],
+                            ['key'=>'sb-sync',     'icon'=>'🔄', 'label'=>'Sünkroniseerimine'],
+                            ['key'=>'sb-tools',    'icon'=>'🔧', 'label'=>'Tööriistad'],
+                        ];
+                        foreach ($sb_nav as $i => $item) : ?>
+                        <div class="swi-nav-item <?php echo $i===0?'active':''; ?>"
+                             data-panel="<?php echo esc_attr($item['key']); ?>"
+                             onclick="swiPanel('<?php echo esc_js($item['key']); ?>', this, 'simplebooks')">
+                            <span class="swi-nav-icon"><?php echo $item['icon']; ?></span>
+                            <?php echo esc_html($item['label']); ?>
                         </div>
+                        <?php endforeach; ?>
                     </nav>
                     <div class="swi-content">
+
+                        <!-- ── Üldseaded ── -->
                         <div class="swi-panel active" id="swi-panel-sb-general">
                             <?php if ( isset($_GET['settings-updated']) ) : ?>
                             <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
@@ -666,8 +681,88 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <?php $this->render_toggle('swi_simplebooks_enable', 'Luba Simplebooks', $sb_on); ?>
                                 <?php woocommerce_admin_fields($sb_s); ?>
                             </div>
-                            <div class="swi-alert info">ℹ <div>Simplebooks ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Simplebooks API võti lisatud.</div></div>
+                            <div class="swi-alert info">ℹ <div>Simplebooks ei vaja eraldi maksude kaardistust — käibemaks arvutatakse automaatselt iga toote rea pealt.</div></div>
                         </div>
+
+                        <!-- ── Saatmise ajalugu ── -->
+                        <?php $sb_history = (array) get_option('swi_sb_send_history', []); ?>
+                        <div class="swi-panel" id="swi-panel-sb-history">
+                            <div class="swi-section-title">Simplebooks – Saatmise ajalugu</div>
+                            <div class="swi-section-desc">Viimased 50 Simplebooks saatmiskatset.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <?php if (empty($sb_history)) : ?>
+                                <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
+                                <?php else : ?>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                    <button type="button" id="swi-sb-clear-history-btn" class="button button-small" style="color:#b32d2e;">Tühista ajalugu</button>
+                                    <span style="font-size:12px;color:#6b7280;"><?php echo count($sb_history); ?> kirjet</span>
+                                </div>
+                                <table class="widefat striped" id="swi-sb-history-table">
+                                    <thead><tr>
+                                        <th>Aeg</th><th>Tellimus</th><th>Staatus</th><th>Sõnum</th>
+                                    </tr></thead>
+                                    <tbody>
+                                    <?php foreach ($sb_history as $i => $entry) :
+                                        $es = $entry['status'] ?? '';
+                                        $col = $es === 'ok' ? '#14532d' : '#991b1b';
+                                        $bg  = $es === 'ok' ? '#dcfce7' : '#fee2e2';
+                                    ?>
+                                    <tr data-row="<?php echo $i; ?>">
+                                        <td style="font-size:12px;"><?php echo esc_html($entry['time'] ?? ''); ?></td>
+                                        <td><a href="<?php echo esc_url(admin_url('post.php?post='.intval($entry['order_id']??0).'&action=edit')); ?>" target="_blank">#<?php echo intval($entry['order_id']??0); ?></a></td>
+                                        <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $col; ?>;"><?php echo esc_html($es); ?></span></td>
+                                        <td style="font-size:12px;"><?php echo esc_html($entry['message'] ?? ''); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <div id="swi-sb-history-pagination" style="display:flex;align-items:center;gap:4px;margin-top:12px;flex-wrap:wrap;"></div>
+                                <script>
+                                (function(){
+                                    var PER=10, rows=document.querySelectorAll('#swi-sb-history-table tbody tr'), total=rows.length, pages=Math.ceil(total/PER), cur=1;
+                                    if(pages<=1) return;
+                                    function showPage(p){cur=p;rows.forEach(function(tr,i){tr.style.display=(i>=(p-1)*PER&&i<p*PER)?'':'none';});renderPager();}
+                                    function renderPager(){var nav=document.getElementById('swi-sb-history-pagination');nav.innerHTML='';for(var i=1;i<=pages;i++){var btn=document.createElement('button');btn.type='button';btn.textContent=i;btn.style.cssText='min-width:32px;padding:3px 8px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;font-size:12px;'+(i===cur?'background:#2563eb;color:#fff;border-color:#2563eb;':'background:#fff;color:#374151;');(function(pg){btn.addEventListener('click',function(){showPage(pg);});})(i);nav.appendChild(btn);}}
+                                    showPage(1);
+                                })();
+                                </script>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- ── Sünkroniseerimise kontroll ── -->
+                        <div class="swi-panel" id="swi-panel-sb-sync">
+                            <div class="swi-section-title">Simplebooks – Sünkroniseerimise kontroll</div>
+                            <div class="swi-section-desc">Võrdle WooCommerce tellimusi Simplebooks arvetega. Puuduvaid arveid saad siit uuesti saata.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <button type="button" id="swi-sb-sync-btn" class="button button-secondary">Kontrolli sünkroniseerimist</button>
+                                <span id="swi-sb-sync-spinner" style="display:none;margin-left:10px;">Laen...</span>
+                                <div id="swi-sb-sync-result" style="margin-top:16px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- ── Tööriistad ── -->
+                        <div class="swi-panel" id="swi-panel-sb-tools">
+                            <div class="swi-section-title">Simplebooks – Tööriistad</div>
+                            <div class="swi-section-desc">Käsitsi saatmine, arve eelvaade ja seadete haldus.</div>
+
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada tellimus Simplebooks'i, olenemata kas see on juba saadetud.</p>
+                                <input type="number" id="swi-sb-manual-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
+                                <button type="button" id="swi-sb-manual-btn" class="button button-secondary">Saada Simplebooks'i</button>
+                                <span id="swi-sb-manual-result" style="margin-left:10px;font-size:12px;"></span>
+                            </div>
+
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Arve eelvaade</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kuva mis andmed Simplebooks'i lähevad enne päris saatmist.</p>
+                                <input type="number" id="swi-sb-preview-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
+                                <button type="button" id="swi-sb-preview-btn" class="button button-secondary">Näita JSON</button>
+                                <pre id="swi-sb-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -976,7 +1071,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     });
                 }
 
-                // Feature 7: Kustuta ajalugu
+                // Feature 7: Kustuta ajalugu (Merit)
                 var clearHistBtn = document.getElementById('swi-clear-history-btn');
                 if (clearHistBtn) {
                     clearHistBtn.addEventListener('click', function() {
@@ -999,6 +1094,158 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         });
                     });
                 }
+
+                // ══ SIMPLEBOOKS JS ══
+
+                // SB: Kustuta ajalugu
+                var sbClearBtn = document.getElementById('swi-sb-clear-history-btn');
+                if (sbClearBtn) {
+                    sbClearBtn.addEventListener('click', function() {
+                        if (!confirm('Kustuta Simplebooks saatmise ajalugu?')) return;
+                        sbClearBtn.disabled = true;
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_sb_clear_history',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            if (resp.success) {
+                                swiNotify('Simplebooks ajalugu kustutatud.', 'ok');
+                                setTimeout(function(){ window.location.reload(); }, 1000);
+                            } else {
+                                sbClearBtn.disabled = false;
+                                swiNotify('Kustutamine ebaõnnestus.', 'error');
+                            }
+                        });
+                    });
+                }
+
+                // SB: Sünkroniseerimise kontroll
+                var sbSyncBtn = document.getElementById('swi-sb-sync-btn');
+                if (sbSyncBtn) {
+                    sbSyncBtn.addEventListener('click', function() {
+                        var spinner = document.getElementById('swi-sb-sync-spinner');
+                        var result  = document.getElementById('swi-sb-sync-result');
+                        sbSyncBtn.disabled = true;
+                        spinner.style.display = 'inline';
+                        result.innerHTML = '';
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_sb_sync_check',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            sbSyncBtn.disabled = false;
+                            spinner.style.display = 'none';
+                            if (!resp.success) {
+                                result.innerHTML = '<div class="swi-alert err">⚠ ' + (resp.data && resp.data.error ? resp.data.error : 'Viga') + '</div>';
+                                return;
+                            }
+                            var rows = resp.data.rows;
+                            var missing = rows.filter(function(r){ return !r.in_sb; });
+                            if (missing.length === 0) {
+                                result.innerHTML = '';
+                                swiNotify('Kõik arved on Simplebooksiga sünkroniseeritud ✓', 'ok');
+                                return;
+                            }
+                            var html = '<p style="margin:0 0 8px;"><span style="color:#b32d2e"><strong>' + missing.length + ' arvet</strong> puudub Simplebooksist</span></p>';
+                            html += '<table class="widefat striped" style="max-width:860px;"><thead><tr><th>Arve nr</th><th>Kuupäev</th><th>Summa</th><th>Saadetud</th><th></th></tr></thead><tbody>';
+                            missing.forEach(function(r) {
+                                html += '<tr><td><a href="post.php?post=' + r.order_id + '&action=edit" target="_blank">' + r.invoice_no + '</a></td>'
+                                    + '<td>' + r.date + '</td>'
+                                    + '<td>' + r.total + '</td>'
+                                    + '<td style="font-size:11px;color:#666">' + (r.meta_sent || '—') + '</td>'
+                                    + '<td><button type="button" class="button button-small swi-sb-resend-btn" data-id="' + r.order_id + '">Saada uuesti</button></td></tr>';
+                            });
+                            html += '</tbody></table>';
+                            result.innerHTML = html;
+                            result.querySelectorAll('.swi-sb-resend-btn').forEach(function(b) {
+                                b.addEventListener('click', function() {
+                                    var orderId = this.getAttribute('data-id');
+                                    var row = this.closest('tr');
+                                    this.disabled = true; this.textContent = 'Saadan...';
+                                    var self = this;
+                                    jQuery.post(ajaxurl, {
+                                        action: 'swi_sb_sync_resend',
+                                        security: MyAjax.nonce,
+                                        order_id: orderId
+                                    }, function(r2) {
+                                        if (r2.success) {
+                                            row.cells[3].innerHTML = '<span style="color:#0a6b23">✓ Saadetud</span>';
+                                            row.cells[4].innerHTML = '';
+                                            swiNotify('Arve ' + orderId + ' edastatud Simplebooks\'i.', 'ok');
+                                        } else {
+                                            self.textContent = 'Saada uuesti'; self.disabled = false;
+                                            var msg = (r2.data && r2.data.error) ? r2.data.error : 'Tundmatu viga';
+                                            swiNotify('Viga: ' + msg, 'error');
+                                        }
+                                    });
+                                });
+                            });
+                        }).fail(function() {
+                            sbSyncBtn.disabled = false;
+                            spinner.style.display = 'none';
+                            result.innerHTML = '<div class="swi-alert err">⚠ Serveri ühendus katkes.</div>';
+                        });
+                    });
+                }
+
+                // SB: Käsitsi saatmine
+                var sbManualBtn = document.getElementById('swi-sb-manual-btn');
+                if (sbManualBtn) {
+                    sbManualBtn.addEventListener('click', function() {
+                        var orderId = document.getElementById('swi-sb-manual-id').value;
+                        var resultEl = document.getElementById('swi-sb-manual-result');
+                        if (!orderId) { resultEl.textContent = 'Sisesta tellimuse ID.'; return; }
+                        sbManualBtn.disabled = true;
+                        resultEl.textContent = 'Saadan...';
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_sb_manual_send',
+                            security: MyAjax.nonce,
+                            order_id: orderId
+                        }, function(resp) {
+                            sbManualBtn.disabled = false;
+                            if (resp.success) {
+                                resultEl.innerHTML = '<span style="color:#0a6b23">✓ ' + (resp.data.message || 'Edastatud.') + '</span>';
+                                swiNotify(resp.data.message || 'Arve edastatud.', 'ok');
+                            } else {
+                                var msg = (resp.data && resp.data.error) ? resp.data.error : 'Tundmatu viga';
+                                resultEl.innerHTML = '<span style="color:#b32d2e">⚠ ' + msg + '</span>';
+                            }
+                        }).fail(function() {
+                            sbManualBtn.disabled = false;
+                            resultEl.textContent = 'Serveri ühendus katkes.';
+                        });
+                    });
+                }
+
+                // SB: Arve eelvaade (JSON)
+                var sbPreviewBtn = document.getElementById('swi-sb-preview-btn');
+                if (sbPreviewBtn) {
+                    sbPreviewBtn.addEventListener('click', function() {
+                        var orderId = document.getElementById('swi-sb-preview-id').value;
+                        var pre = document.getElementById('swi-sb-preview-result');
+                        if (!orderId) { pre.style.display='block'; pre.textContent = 'Sisesta tellimuse ID.'; return; }
+                        sbPreviewBtn.disabled = true;
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_sb_manual_send',
+                            security: MyAjax.nonce,
+                            order_id: orderId,
+                            preview_only: '1'
+                        }, function(resp) {
+                            sbPreviewBtn.disabled = false;
+                            pre.style.display = 'block';
+                            if (resp.success && resp.data.payload) {
+                                pre.textContent = JSON.stringify(resp.data.payload, null, 2);
+                            } else if (resp.data && resp.data.error) {
+                                pre.textContent = 'Viga: ' + resp.data.error;
+                            } else {
+                                pre.textContent = JSON.stringify(resp, null, 2);
+                            }
+                        }).fail(function() {
+                            sbPreviewBtn.disabled = false;
+                            pre.style.display = 'block';
+                            pre.textContent = 'Serveri ühendus katkes.';
+                        });
+                    });
+                }
+
             });
             </script>
             <?php
