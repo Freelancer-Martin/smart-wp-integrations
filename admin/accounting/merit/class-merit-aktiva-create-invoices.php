@@ -67,13 +67,13 @@ class My_Simple_Ajax_Plugin {
             return;
         }
 
-        // Ära saada sama orderit kaks korda
-        if ( get_post_meta( $order_id, '_swi_sent_merit', true ) ) {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
             return;
         }
 
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
+        // Ära saada sama orderit kaks korda (HPOS-ühilduv)
+        if ( $order->get_meta( '_swi_sent_merit' ) ) {
             return;
         }
 
@@ -85,9 +85,10 @@ class My_Simple_Ajax_Plugin {
         $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
-            update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
-            delete_post_meta( $order_id, '_swi_merit_retry' );
-            delete_post_meta( $order_id, '_swi_merit_retry_count' );
+            $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_merit_retry' );
+            $order->delete_meta_data( '_swi_merit_retry_count' );
+            $order->save();
             $order->add_order_note( 'Merit Aktiva: arve edastatud (' . $res['status'] . ').' );
             swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
         } else {
@@ -95,8 +96,9 @@ class My_Simple_Ajax_Plugin {
             $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
             error_log( 'SWI Merit auto-send failed order ' . $order_id . ': ' . wp_json_encode( $res ) );
             // Feature 3: märgi uuesti saatmiseks
-            update_post_meta( $order_id, '_swi_merit_retry', '1' );
-            update_post_meta( $order_id, '_swi_merit_retry_count', 0 );
+            $order->update_meta_data( '_swi_merit_retry', '1' );
+            $order->update_meta_data( '_swi_merit_retry_count', 0 );
+            $order->save();
             // Feature 4: e-mail teavitus
             if ( get_option( 'swi_merit_email_notify' ) === 'yes' ) {
                 $admin_email = get_option( 'admin_email' );
@@ -127,8 +129,8 @@ class My_Simple_Ajax_Plugin {
             if ( 'wc-' . $order->get_status() !== $this->order_Status ) {
                 continue;
             }
-            // Esmane kontroll: WP meta-flag — kiire ja ei sõltu Merit API kättesaadavusest
-            if ( get_post_meta( $order->get_id(), '_swi_sent_merit', true ) ) {
+            // Esmane kontroll: meta-flag — kiire ja ei sõltu Merit API kättesaadavusest
+            if ( $order->get_meta( '_swi_sent_merit' ) ) {
                 continue;
             }
             $exists = false;
@@ -412,13 +414,17 @@ class My_Simple_Ajax_Plugin {
 
             $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
             if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
-                update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+                $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+                $order->save();
                 $order->add_order_note( 'Merit Aktiva: arve edastatud käsitsi (' . $res['status'] . ').' );
                 swi_log_send_history( $order_id, 'ok', $res['message'] ?? $res['status'] );
                 $results[] = $res;
             } else {
                 $msg = swi_humanize_merit_error( $res );
                 $order->add_order_note( 'Merit Aktiva: käsitsi edastamine ebaõnnestus — ' . $msg );
+                $order->update_meta_data( '_swi_merit_retry', '1' );
+                $order->update_meta_data( '_swi_merit_retry_count', 0 );
+                $order->save();
                 swi_log_send_history( $order_id, 'error', $msg );
                 $errors[] = $res;
             }
@@ -480,7 +486,7 @@ class My_Simple_Ajax_Plugin {
         foreach ( $orders as $order ) {
             $inv_no   = $prefix . $order->get_id();
             $in_merit = in_array( $inv_no, $merit_nos, true );
-            $meta     = get_post_meta( $order->get_id(), '_swi_sent_merit', true );
+            $meta     = $order->get_meta( '_swi_sent_merit' );
             $rows[]   = [
                 'order_id'   => $order->get_id(),
                 'invoice_no' => $inv_no,
@@ -563,14 +569,16 @@ class My_Simple_Ajax_Plugin {
         if ( ! $order ) wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
 
         // Kustuta vana meta-flag et lubada uuesti saatmine
-        delete_post_meta( $order_id, '_swi_sent_merit' );
+        $order->delete_meta_data( '_swi_sent_merit' );
+        $order->save();
 
         $payload = $this->build_payload_for_order( $order );
         if ( ! $payload ) wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
 
         $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
         if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
-            update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+            $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+            $order->save();
             $order->add_order_note( 'Merit Aktiva: arve uuesti edastatud (sync).' );
             wp_send_json_success( [ 'message' => 'Edastatud.' ] );
         } else {
