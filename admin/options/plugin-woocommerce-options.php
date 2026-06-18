@@ -244,13 +244,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
                 /* WC form-table override */
                 .swi-card .form-table { margin:0; }
-                .swi-card .form-table th { width:210px; padding:10px 0; font-size:12.5px; font-weight:600; color:#374151; vertical-align:top; }
+                .swi-card .form-table th { width:230px; padding:10px 0; font-size:12.5px; font-weight:600; color:#374151; vertical-align:top; }
                 .swi-card .form-table td { padding:8px 0; vertical-align:top; }
                 .swi-card .form-table input[type="text"],
                 .swi-card .form-table input[type="url"],
                 .swi-card .form-table select {
                     border:1px solid var(--swi-border); border-radius:6px;
-                    padding:7px 10px; font-size:13px; min-width:300px; background:#fff;
+                    padding:7px 10px; font-size:13px; min-width:420px; background:#fff;
                     transition:border-color .12s;
                 }
                 .swi-card .form-table input:focus,
@@ -346,7 +346,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Merit Aktiva – Üldseaded</div>
@@ -394,12 +394,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Simplebooks – Üldseaded</div>
                             <div class="swi-section-desc">Simplebooks API võti seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Simplebooks</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:620px;"><?php woocommerce_admin_fields($sb_s); ?></div>
+                            <div class="swi-card" style="max-width:860px;"><?php woocommerce_admin_fields($sb_s); ?></div>
                             <div class="swi-alert info">ℹ <div>Simplebooks ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Simplebooks API võti lisatud.</div></div>
                         </div>
                     </div>
@@ -423,12 +423,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Smart Accounts – Üldseaded</div>
                             <div class="swi-section-desc">Smart Accounts Client ID ja Secret seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:620px;"><?php woocommerce_admin_fields($sa_s); ?></div>
+                            <div class="swi-card" style="max-width:860px;"><?php woocommerce_admin_fields($sa_s); ?></div>
                             <div class="swi-alert info">ℹ <div>Smart Accounts ei vaja keerulisi kaardistusi — orderid edastatakse automaatselt kui litsentsi seadetes on Smart Accounts API seadistused lisatud.</div></div>
                         </div>
                     </div>
