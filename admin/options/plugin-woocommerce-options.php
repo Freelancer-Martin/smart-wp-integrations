@@ -744,7 +744,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- ── Tööriistad ── -->
                         <div class="swi-panel" id="swi-panel-sb-tools">
                             <div class="swi-section-title">Simplebooks – Tööriistad</div>
-                            <div class="swi-section-desc">Käsitsi saatmine, arve eelvaade ja seadete haldus.</div>
+                            <div class="swi-section-desc">Hulga saatmine, käsitsi saatmine, arve eelvaade.</div>
+
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Sünkroniseeri kõik</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada kõik saadetamata tellimused korraga Simplebooks'i (max 50 korraga).</p>
+                                <button type="button" id="swi-sb-bulk-btn" class="button button-primary">Sünkroniseeri kõik puuduvad</button>
+                                <span id="swi-sb-bulk-spinner" style="display:none;margin-left:10px;font-size:12px;">Saadan...</span>
+                                <div id="swi-sb-bulk-result" style="margin-top:12px;font-size:12.5px;"></div>
+                            </div>
 
                             <div class="swi-card" style="max-width:860px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
@@ -1096,6 +1104,44 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 }
 
                 // ══ SIMPLEBOOKS JS ══
+
+                // SB: Sünkroniseeri kõik (bulk send)
+                var sbBulkBtn = document.getElementById('swi-sb-bulk-btn');
+                if (sbBulkBtn) {
+                    sbBulkBtn.addEventListener('click', function() {
+                        if (!confirm('Saada kõik saadetamata tellimused Simplebooks\'i? Toiming võib võtta kuni 30 sekundit.')) return;
+                        var spinner = document.getElementById('swi-sb-bulk-spinner');
+                        var result  = document.getElementById('swi-sb-bulk-result');
+                        sbBulkBtn.disabled = true;
+                        spinner.style.display = 'inline';
+                        result.innerHTML = '';
+                        jQuery.post(ajaxurl, {
+                            action: 'swi_sb_bulk_send',
+                            security: MyAjax.nonce
+                        }, function(resp) {
+                            sbBulkBtn.disabled = false;
+                            spinner.style.display = 'none';
+                            if (resp.success) {
+                                var d = resp.data;
+                                var color = d.failed > 0 ? '#b32d2e' : '#0a6b23';
+                                result.innerHTML = '<span style="color:' + color + ';font-weight:600;">' + d.message + '</span>';
+                                if (d.errors && d.errors.length) {
+                                    result.innerHTML += '<ul style="margin:8px 0 0;padding-left:18px;font-size:11.5px;color:#b32d2e;">'
+                                        + d.errors.map(function(e){ return '<li>' + e + '</li>'; }).join('')
+                                        + '</ul>';
+                                }
+                                if (d.sent > 0) swiNotify(d.sent + ' arvet edastatud Simplebooks\'i.', 'ok');
+                            } else {
+                                var msg = (resp.data && resp.data.error) ? resp.data.error : 'Tundmatu viga';
+                                result.innerHTML = '<span style="color:#b32d2e">⚠ ' + msg + '</span>';
+                            }
+                        }).fail(function() {
+                            sbBulkBtn.disabled = false;
+                            spinner.style.display = 'none';
+                            result.innerHTML = '<span style="color:#b32d2e">⚠ Serveri ühendus katkes.</span>';
+                        });
+                    });
+                }
 
                 // SB: Kustuta ajalugu
                 var sbClearBtn = document.getElementById('swi-sb-clear-history-btn');

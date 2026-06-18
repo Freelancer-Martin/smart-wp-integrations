@@ -48,10 +48,253 @@ class SWI_Simplebooks_Create_Invoices {
         $hook   = 'woocommerce_order_status_' . ltrim( $status, 'wc-' );
         add_action( $hook, [ $this, 'auto_send_order' ], 20, 1 );
 
+        // AJAX
         add_action( 'wp_ajax_swi_sb_sync_check',    [ $this, 'handle_sync_check' ] );
         add_action( 'wp_ajax_swi_sb_sync_resend',   [ $this, 'handle_sync_resend' ] );
         add_action( 'wp_ajax_swi_sb_manual_send',   [ $this, 'handle_manual_send' ] );
         add_action( 'wp_ajax_swi_sb_clear_history', [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_sb_bulk_send',     [ $this, 'handle_bulk_send' ] );
+        add_action( 'wp_ajax_swi_sb_order_send',    [ $this, 'handle_order_send' ] );
+
+        // Tellimuste nimekirja SB staatus kolumn — HPOS + legacy
+        add_filter( 'manage_woocommerce_page_wc-orders_columns',  [ $this, 'add_order_column' ] );
+        add_action( 'manage_woocommerce_page_wc-orders_custom_column', [ $this, 'render_order_column' ], 10, 2 );
+        add_filter( 'manage_edit-shop_order_columns',             [ $this, 'add_order_column' ] );
+        add_action( 'manage_shop_order_posts_custom_column',      [ $this, 'render_order_column' ], 10, 2 );
+
+        // Orderi lehel meta-box
+        add_action( 'add_meta_boxes', [ $this, 'register_meta_box' ] );
+
+        // Admin notice kinni jäänud orderite kohta
+        add_action( 'admin_notices', [ $this, 'show_stuck_notice' ] );
+    }
+
+    /* ─── WC orders kolumn ─── */
+
+    public function add_order_column( array $cols ): array {
+        $new = [];
+        foreach ( $cols as $key => $label ) {
+            $new[ $key ] = $label;
+            if ( $key === 'order_status' ) {
+                $new['swi_simplebooks'] = 'SB';
+            }
+        }
+        return $new;
+    }
+
+    public function render_order_column( string $column, int $order_id ): void {
+        if ( $column !== 'swi_simplebooks' ) return;
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return;
+        $sent  = $order->get_meta( '_swi_sent_simplebooks' );
+        $retry = (int) $order->get_meta( '_swi_simplebooks_retry_count' );
+        if ( $sent ) {
+            $label = esc_attr( date( 'd.m.Y H:i', strtotime( $sent ) ) );
+            echo '<span title="Saadetud: ' . $label . '" style="color:#16a34a;font-size:15px;cursor:default;">✓</span>';
+        } elseif ( $retry >= 3 ) {
+            echo '<span title="Saatmine ebaõnnestus (3/3 katset)" style="color:#dc2626;font-size:15px;cursor:default;">✗</span>';
+        } else {
+            echo '<span style="color:#9ca3af;font-size:15px;cursor:default;">—</span>';
+        }
+    }
+
+    /* ─── Meta-box orderi lehel ─── */
+
+    public function register_meta_box(): void {
+        foreach ( [ 'shop_order', 'wc-order' ] as $screen ) {
+            add_meta_box(
+                'swi-sb-metabox',
+                'Simplebooks',
+                [ $this, 'render_meta_box' ],
+                $screen,
+                'side',
+                'default'
+            );
+        }
+    }
+
+    public function render_meta_box( $post_or_order ): void {
+        $order_id = is_a( $post_or_order, 'WC_Order' ) ? $post_or_order->get_id() : $post_or_order->ID;
+        $order    = wc_get_order( $order_id );
+        if ( ! $order ) return;
+
+        $sent      = $order->get_meta( '_swi_sent_simplebooks' );
+        $retry     = (int) $order->get_meta( '_swi_simplebooks_retry_count' );
+        $retry_on  = $order->get_meta( '_swi_simplebooks_retry' );
+        $nonce     = wp_create_nonce( 'my_nonce' );
+        $prefix    = get_option( 'swi_simplebooks_prefix', 'SB' );
+        $inv_no    = $prefix . $order_id;
+        ?>
+        <div id="swi-sb-metabox-<?php echo $order_id; ?>" style="font-size:12.5px;line-height:1.6;">
+        <?php if ( $sent ) : ?>
+            <p style="margin:0 0 6px;color:#16a34a;">✓ <strong>Saadetud</strong></p>
+            <p style="margin:0 0 8px;color:#6b7280;">Arve: <?php echo esc_html( $inv_no ); ?><br>
+               Aeg: <?php echo esc_html( date( 'd.m.Y H:i', strtotime( $sent ) ) ); ?></p>
+        <?php elseif ( $retry >= 3 ) : ?>
+            <p style="margin:0 0 6px;color:#dc2626;">✗ <strong>Saatmine ebaõnnestus</strong></p>
+            <p style="margin:0 0 8px;color:#6b7280;"><?php echo $retry; ?>/3 katset tehtud</p>
+        <?php elseif ( $retry_on ) : ?>
+            <p style="margin:0 0 6px;color:#d97706;">⟳ <strong>Järjekorras</strong></p>
+            <p style="margin:0 0 8px;color:#6b7280;">Katse <?php echo $retry; ?>/3 — proovitakse uuesti</p>
+        <?php else : ?>
+            <p style="margin:0 0 8px;color:#6b7280;">Pole saadetud</p>
+        <?php endif; ?>
+        <?php if ( get_option( 'swi_simplebooks_enable' ) === 'yes' ) : ?>
+            <button type="button"
+                    class="button button-small swi-sb-order-send-btn"
+                    data-id="<?php echo $order_id; ?>"
+                    data-nonce="<?php echo $nonce; ?>"
+                    style="width:100%;">
+                <?php echo $sent ? 'Saada uuesti' : 'Saada Simplebooks\'i'; ?>
+            </button>
+            <span id="swi-sb-order-result-<?php echo $order_id; ?>" style="display:block;margin-top:6px;font-size:11.5px;"></span>
+        <?php endif; ?>
+        </div>
+        <script>
+        (function(){
+            var btn = document.querySelector('.swi-sb-order-send-btn[data-id="<?php echo $order_id; ?>"]');
+            if (!btn) return;
+            btn.addEventListener('click', function(){
+                btn.disabled = true; btn.textContent = 'Saadan...';
+                var res = document.getElementById('swi-sb-order-result-<?php echo $order_id; ?>');
+                jQuery.post(ajaxurl, {
+                    action: 'swi_sb_order_send',
+                    security: btn.dataset.nonce,
+                    order_id: btn.dataset.id
+                }, function(r){
+                    btn.disabled = false;
+                    if (r.success) {
+                        btn.textContent = 'Saada uuesti';
+                        res.innerHTML = '<span style="color:#16a34a">✓ ' + (r.data.message||'Saadetud') + '</span>';
+                    } else {
+                        btn.textContent = 'Proovi uuesti';
+                        res.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
+                    }
+                }).fail(function(){ btn.disabled=false; btn.textContent='Proovi uuesti'; res.textContent='Ühendus katkes.'; });
+            });
+        })();
+        </script>
+        <?php
+    }
+
+    /* ─── Admin notice: kinni jäänud orderid ─── */
+
+    public function show_stuck_notice(): void {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) return;
+        if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) return;
+
+        $stuck = wc_get_orders( [
+            'limit'      => 5,
+            'meta_query' => [
+                'relation' => 'AND',
+                [ 'key' => '_swi_simplebooks_retry_count', 'value' => 3, 'compare' => '>=', 'type' => 'NUMERIC' ],
+                [ 'key' => '_swi_sent_simplebooks', 'compare' => 'NOT EXISTS' ],
+            ],
+        ] );
+
+        if ( empty( $stuck ) ) return;
+
+        $ids = implode( ', ', array_map( fn( $o ) => '#' . $o->get_id(), $stuck ) );
+        $url = admin_url( 'admin.php?page=wc-settings&tab=checkout&section=smart_wp_integrations&swi_tab=simplebooks' );
+        echo '<div class="notice notice-error is-dismissible"><p>'
+            . '<strong>Smart WP Integrations:</strong> '
+            . count( $stuck ) . ' Simplebooks arvet ei õnnestunud saata (3/3 katset läbi): '
+            . esc_html( $ids ) . '. '
+            . '<a href="' . esc_url( $url ) . '">Vaata Tööriistad paneeli →</a>'
+            . '</p></div>';
+    }
+
+    /* ─── AJAX: meta-box order send ─── */
+
+    public function handle_order_send(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+
+        $order_id = (int) ( $_POST['order_id'] ?? 0 );
+        $order    = $order_id ? wc_get_order( $order_id ) : null;
+        if ( ! $order ) wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
+
+        $order->delete_meta_data( '_swi_sent_simplebooks' );
+        $order->save();
+
+        $payload = $this->build_payload( $order );
+        if ( ! $payload ) wp_send_json_error( [ 'error' => 'Payload ehitamine ebaõnnestus.' ] );
+
+        $res = LocalApiClient::sendEncryptedOrder( $payload, 'simplebooks' );
+
+        if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+            $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_retry' );
+            $order->delete_meta_data( '_swi_simplebooks_retry_count' );
+            $order->save();
+            $order->add_order_note( 'Simplebooks: arve edastatud orderi lehelt.' );
+            swi_sb_log_send_history( $order_id, 'ok', 'Orderi leht: ' . $payload['number'] );
+            wp_send_json_success( [ 'message' => $payload['number'] . ' edastatud.' ] );
+        } else {
+            $msg = $this->humanize_error( $res );
+            swi_sb_log_send_history( $order_id, 'error', 'Orderi leht: ' . $msg );
+            wp_send_json_error( [ 'error' => $msg ] );
+        }
+    }
+
+    /* ─── AJAX: bulk send kõik saadetamata orderid ─── */
+
+    public function handle_bulk_send(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+
+        if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) {
+            wp_send_json_error( [ 'error' => 'Simplebooks pole lubatud.' ] );
+        }
+
+        $status = ltrim( get_option( 'swi_simplebooks_order_status', 'wc-completed' ), 'wc-' );
+        $orders = wc_get_orders( [
+            'status' => $status,
+            'limit'  => 50,
+            'meta_query' => [ [
+                'key'     => '_swi_sent_simplebooks',
+                'compare' => 'NOT EXISTS',
+            ] ],
+        ] );
+
+        if ( empty( $orders ) ) {
+            wp_send_json_success( [ 'sent' => 0, 'failed' => 0, 'total' => 0, 'message' => 'Kõik arved on juba saadetud.' ] );
+        }
+
+        $sent = $failed = 0;
+        $errors = [];
+
+        foreach ( $orders as $order ) {
+            $payload = $this->build_payload( $order );
+            if ( ! $payload ) { $failed++; continue; }
+
+            $res = LocalApiClient::sendEncryptedOrder( $payload, 'simplebooks' );
+
+            if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+                $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+                $order->save();
+                $order->add_order_note( 'Simplebooks: arve edastatud hulga sünkroniseerimisega.' );
+                swi_sb_log_send_history( $order->get_id(), 'ok', 'Hulga saatmine: ' . $payload['number'] );
+                $sent++;
+            } else {
+                $msg = $this->humanize_error( $res );
+                swi_sb_log_send_history( $order->get_id(), 'error', 'Hulga saatmine ebaõnnestus: ' . $msg );
+                $errors[] = '#' . $order->get_id() . ': ' . $msg;
+                $failed++;
+            }
+        }
+
+        wp_send_json_success( [
+            'sent'    => $sent,
+            'failed'  => $failed,
+            'total'   => count( $orders ),
+            'errors'  => $errors,
+            'message' => $sent . ' arvet edastatud' . ( $failed ? ', ' . $failed . ' ebaõnnestus' : '.' ),
+        ] );
     }
 
     /**
