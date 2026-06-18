@@ -21,6 +21,8 @@ class My_Simple_Ajax_Plugin {
         add_action( 'wp_ajax_nopriv_my_custom_action', [ $this, 'handle_ajax' ] );
         add_action( 'wp_ajax_send_invoice_action',        [ $this, 'send_invoice_to_customer' ] );
         add_action( 'wp_ajax_nopriv_send_invoice_action', [ $this, 'send_invoice_to_customer' ] );
+        add_action( 'wp_ajax_swi_merit_sync_check',  [ $this, 'handle_sync_check' ] );
+        add_action( 'wp_ajax_swi_merit_sync_resend', [ $this, 'handle_sync_resend' ] );
 
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
@@ -343,6 +345,84 @@ class My_Simple_Ajax_Plugin {
         }
 
         wp_send_json_success( 'Emailid on saadetud' );
+    }
+
+    public function handle_sync_check(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+
+        // Küsi kõik Merit arved viimasest 12 kuust
+        $base        = LocalApiClient::get_base_url_public();
+        $license_key = get_option( 'smart_wp_integtaion_license_text', '' );
+        $resp = wp_remote_get( rtrim( $base, '/' ) . '/api/merit/all-invoices?months=12', [
+            'timeout' => 20,
+            'headers' => [ 'X-License-Token' => $license_key, 'Accept' => 'application/json' ],
+        ] );
+
+        $merit_nos = [];
+        if ( ! is_wp_error( $resp ) && wp_remote_retrieve_response_code( $resp ) === 200 ) {
+            $data = json_decode( wp_remote_retrieve_body( $resp ), true );
+            foreach ( (array) ( $data['invoices'] ?? [] ) as $inv ) {
+                $no = $inv['InvoiceNo'] ?? ( $inv['invoiceNo'] ?? null );
+                if ( $no ) $merit_nos[] = $no;
+            }
+        }
+
+        // Kõik WC orderid konfigureeritava staatusega
+        $status  = ltrim( get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' ), 'wc-' );
+        $prefix  = get_option( 'smart_wp_integtaion_arve_eesliides', '' );
+        $orders  = wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] );
+
+        $rows = [];
+        foreach ( $orders as $order ) {
+            $inv_no   = $prefix . $order->get_id();
+            $in_merit = in_array( $inv_no, $merit_nos, true );
+            $meta     = get_post_meta( $order->get_id(), '_swi_sent_merit', true );
+            $rows[]   = [
+                'order_id'   => $order->get_id(),
+                'invoice_no' => $inv_no,
+                'date'       => $order->get_date_created() ? $order->get_date_created()->date( 'd.m.Y' ) : '-',
+                'total'      => wc_price( $order->get_total() ),
+                'in_merit'   => $in_merit,
+                'meta_sent'  => $meta ? date( 'd.m.Y H:i', strtotime( $meta ) ) : '',
+            ];
+        }
+
+        wp_send_json_success( [ 'rows' => $rows, 'merit_count' => count( $merit_nos ) ] );
+    }
+
+    public function handle_sync_resend(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+            wp_send_json_error( [ 'error' => 'Merit Aktiva integratsioon on keelatud.' ] );
+        }
+
+        $order_id = absint( $_POST['order_id'] ?? 0 );
+        if ( ! $order_id ) wp_send_json_error( [ 'error' => 'Order ID puudub.' ] );
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
+
+        // Kustuta vana meta-flag et lubada uuesti saatmine
+        delete_post_meta( $order_id, '_swi_sent_merit' );
+
+        $payload = $this->build_payload_for_order( $order );
+        if ( ! $payload ) wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
+
+        $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
+        if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
+            update_post_meta( $order_id, '_swi_sent_merit', current_time( 'mysql' ) );
+            $order->add_order_note( 'Merit Aktiva: arve uuesti edastatud (sync).' );
+            wp_send_json_success( [ 'message' => 'Edastatud.' ] );
+        } else {
+            $order->add_order_note( 'Merit Aktiva: uuesti edastamine ebaõnnestus — ' . wp_json_encode( $res ) );
+            wp_send_json_error( $res );
+        }
     }
 }
 

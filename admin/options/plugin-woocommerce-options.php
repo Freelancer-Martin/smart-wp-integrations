@@ -351,6 +351,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <?php $this->render_toggle('smart_wp_integtaion_enable', 'Luba Merit Aktiva', $merit_on); ?>
                                 <?php woocommerce_admin_fields($merit_s); ?>
                             </div>
+                            <div class="swi-section-title" style="margin-top:24px;">Sünkroniseerimine</div>
+                            <div class="swi-section-desc">Võrdle WooCommerce tellimusi Merit Aktiva arvetega. Puuduvaid arveid saad siit uuesti saata.</div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <button type="button" id="swi-sync-btn" class="button button-secondary">Kontrolli sünkroniseerimist</button>
+                                <span id="swi-sync-spinner" style="display:none;margin-left:10px;">Laen...</span>
+                                <div id="swi-sync-result" style="margin-top:16px;"></div>
+                            </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-countries">
                             <div class="swi-section-title">Merit Aktiva – Riigi VAT seadistused</div>
@@ -458,6 +465,83 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 var panel = document.getElementById('swi-panel-' + key);
                 if (panel) panel.classList.add('active');
             }
+            document.addEventListener('DOMContentLoaded', function() {
+                var btn = document.getElementById('swi-sync-btn');
+                if (!btn) return;
+                btn.addEventListener('click', function() {
+                    var spinner = document.getElementById('swi-sync-spinner');
+                    var result  = document.getElementById('swi-sync-result');
+                    btn.disabled = true;
+                    spinner.style.display = 'inline';
+                    result.innerHTML = '';
+                    jQuery.post(ajaxurl, {
+                        action: 'swi_merit_sync_check',
+                        security: MyAjax.nonce
+                    }, function(resp) {
+                        btn.disabled = false;
+                        spinner.style.display = 'none';
+                        if (!resp.success) {
+                            result.innerHTML = '<div class="swi-alert err">⚠ ' + (resp.data && resp.data.error ? resp.data.error : 'Viga') + '</div>';
+                            return;
+                        }
+                        var rows = resp.data.rows;
+                        var missing = rows.filter(function(r){ return !r.in_merit; });
+                        var ok      = rows.filter(function(r){ return  r.in_merit; });
+                        var html = '<p style="margin:0 0 8px;"><strong>' + rows.length + '</strong> WC tellimust | '
+                            + '<span style="color:#0a6b23">✓ ' + ok.length + ' Meriti jõudnud</span> | '
+                            + '<span style="color:#b32d2e">✗ ' + missing.length + ' puudub Meritist</span></p>';
+                        if (rows.length === 0) {
+                            result.innerHTML = html + '<p>Tellimusi ei leitud.</p>';
+                            return;
+                        }
+                        html += '<table class="widefat striped" style="max-width:860px;">'
+                            + '<thead><tr><th>Arve nr</th><th>Kuupäev</th><th>Summa</th><th>Merit</th><th>Saadetud</th><th></th></tr></thead><tbody>';
+                        rows.forEach(function(r) {
+                            var statusIcon = r.in_merit
+                                ? '<span style="color:#0a6b23">✓ Olemas</span>'
+                                : '<span style="color:#b32d2e">✗ Puudub</span>';
+                            var action = r.in_merit ? '' :
+                                '<button type="button" class="button button-small swi-resend-btn" data-id="' + r.order_id + '">Saada uuesti</button>';
+                            html += '<tr>'
+                                + '<td><a href="post.php?post=' + r.order_id + '&action=edit" target="_blank">' + r.invoice_no + '</a></td>'
+                                + '<td>' + r.date + '</td>'
+                                + '<td>' + r.total + '</td>'
+                                + '<td>' + statusIcon + '</td>'
+                                + '<td style="font-size:11px;color:#666">' + (r.meta_sent || '—') + '</td>'
+                                + '<td>' + action + '</td>'
+                                + '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        result.innerHTML = html;
+
+                        // Resend nupud
+                        result.querySelectorAll('.swi-resend-btn').forEach(function(b) {
+                            b.addEventListener('click', function() {
+                                var orderId = this.getAttribute('data-id');
+                                var row = this.closest('tr');
+                                this.disabled = true;
+                                this.textContent = 'Saadan...';
+                                var self = this;
+                                jQuery.post(ajaxurl, {
+                                    action: 'swi_merit_sync_resend',
+                                    security: MyAjax.nonce,
+                                    order_id: orderId
+                                }, function(r2) {
+                                    if (r2.success) {
+                                        row.cells[3].innerHTML = '<span style="color:#0a6b23">✓ Saadetud</span>';
+                                        row.cells[5].innerHTML = '';
+                                    } else {
+                                        self.textContent = 'Viga!';
+                                        self.disabled = false;
+                                        alert('Viga: ' + JSON.stringify(r2.data));
+                                    }
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+
             function swiToggle(id) {
                 var h = document.getElementById('swi_h_' + id);
                 var t = document.getElementById('swi_t_' + id);
