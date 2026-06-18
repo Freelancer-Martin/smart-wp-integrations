@@ -210,6 +210,10 @@ class My_Simple_Ajax_Plugin {
             ],
         ];
 
+        if ( ! empty( $merit_account ) ) {
+            $payload['PaymentMethod'] = $merit_account;
+        }
+
         return $payload;
     }
 
