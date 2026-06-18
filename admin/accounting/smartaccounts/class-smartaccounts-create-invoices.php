@@ -398,10 +398,24 @@ class SWI_SmartAccounts_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
         }
 
-        $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $all     = wc_get_orders( [ 'limit' => 200, 'status' => ltrim( $status, 'wc-' ) ] );
-        $orders  = array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) );
-        $orders  = array_slice( $orders, 0, 50 );
+        $status   = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
+        $status_q = ltrim( $status, 'wc-' );
+        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status_q ] );
+        $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) ), 0, 50 );
+
+        // Debug: kui 0 orderit, tagasta info miks
+        if ( empty( $orders ) ) {
+            $all_statuses = array_unique( array_map( fn( $o ) => $o->get_status(), wc_get_orders( [ 'limit' => 10 ] ) ) );
+            wp_send_json_success( [
+                'sent'    => 0, 'failed' => 0, 'total' => 0,
+                'message' => 'Kõik arved on juba saadetud.',
+                '_debug'  => [
+                    'queried_status' => $status_q,
+                    'all_found'      => count( $all ),
+                    'order_statuses' => $all_statuses,
+                ],
+            ] );
+        }
 
         $sent = 0; $failed = 0; $errors = [];
 
