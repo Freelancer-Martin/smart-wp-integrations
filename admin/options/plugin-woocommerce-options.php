@@ -286,10 +286,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
                 <!-- TOP TABS -->
                 <div class="swi-tabs">
-                    <div class="swi-tab active" data-tab="connection" onclick="swiTab('connection', this)">
-                        🔌 Ühendus
-                    </div>
-                    <div class="swi-tab" data-tab="merit" onclick="swiTab('merit', this)">
+                    <div class="swi-tab active" data-tab="merit" onclick="swiTab('merit', this)">
                         📊 Merit Aktiva
                         <span class="swi-tab-badge <?php echo $merit_on ? 'on' : 'off'; ?>"><?php echo $merit_on ? 'aktiivne' : 'väljas'; ?></span>
                     </div>
@@ -303,23 +300,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
-                <!-- ══ TAB: ÜHENDUS ══ -->
-                <div class="swi-tabview active" id="swi-tab-connection"><div class="swi-content">
-                    <?php if ( isset($_GET['settings-updated']) ) : ?>
-                    <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
-                    <?php endif; ?>
-                    <?php if ($this->proxy_error) : ?>
-                    <div class="swi-alert err">⚠ <div><strong>Vaheserver ei ole kättesaadav.</strong><br><?php echo esc_html($this->proxy_error); ?></div></div>
-                    <?php endif; ?>
-                    <div class="swi-section-title">Vaheserveri ühendus</div>
-                    <div class="swi-section-desc">Kõik süsteemid (Merit Aktiva, Simplebooks, Smart Accounts) kasutavad sama vaheserverit. Kopeeri litsentsi võti ja krüptovõti Laravel rakenduse litsentsi lehelt.</div>
-                    <div class="swi-card" style="max-width:680px;">
-                        <?php woocommerce_admin_fields( $conn_s ); ?>
-                    </div>
-                </div></div>
-
                 <!-- ══ TAB: MERIT AKTIVA ══ -->
-                <div class="swi-tabview" id="swi-tab-merit">
+                <div class="swi-tabview active" id="swi-tab-merit">
                     <nav class="swi-sidebar">
                         <div class="swi-sidebar-label">Merit Aktiva</div>
                         <?php
@@ -341,8 +323,19 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </nav>
                     <div class="swi-content">
                         <div class="swi-panel active" id="swi-panel-merit-general">
+                            <?php if ( isset($_GET['settings-updated']) ) : ?>
+                            <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
+                            <?php endif; ?>
+                            <?php if ($this->proxy_error) : ?>
+                            <div class="swi-alert err">⚠ <div><strong>Vaheserver ei ole kättesaadav.</strong><br><?php echo esc_html($this->proxy_error); ?></div></div>
+                            <?php endif; ?>
+                            <div class="swi-section-title">Vaheserveri ühendus</div>
+                            <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
+                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                                <?php woocommerce_admin_fields( $conn_s ); ?>
+                            </div>
                             <div class="swi-section-title">Merit Aktiva – Üldseaded</div>
-                            <div class="swi-section-desc">Merit Aktiva API võtmed (API ID + API Key) seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Merit Aktiva</em>. Siin seadista WooCommerce käitumine.</div>
+                            <div class="swi-section-desc">Merit Aktiva API võtmed (API ID + API Key) seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Merit Aktiva</em>.</div>
                             <div class="swi-card"><?php woocommerce_admin_fields($merit_s); ?></div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-countries">
@@ -378,6 +371,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </nav>
                     <div class="swi-content">
                         <div class="swi-panel active" id="swi-panel-sb-general">
+                            <?php if ( isset($_GET['settings-updated']) ) : ?>
+                            <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
+                            <?php endif; ?>
+                            <?php if ($this->proxy_error) : ?>
+                            <div class="swi-alert err">⚠ <div><strong>Vaheserver ei ole kättesaadav.</strong><br><?php echo esc_html($this->proxy_error); ?></div></div>
+                            <?php endif; ?>
+                            <div class="swi-section-title">Vaheserveri ühendus</div>
+                            <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
+                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                                <?php woocommerce_admin_fields( $conn_s ); ?>
+                            </div>
                             <div class="swi-section-title">Simplebooks – Üldseaded</div>
                             <div class="swi-section-desc">Simplebooks API võti seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Simplebooks</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
                             <div class="swi-card" style="max-width:620px;"><?php woocommerce_admin_fields($sb_s); ?></div>
@@ -396,6 +400,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </nav>
                     <div class="swi-content">
                         <div class="swi-panel active" id="swi-panel-sa-general">
+                            <?php if ( isset($_GET['settings-updated']) ) : ?>
+                            <div class="swi-alert ok">✓ <div><strong>Seaded on salvestatud.</strong></div></div>
+                            <?php endif; ?>
+                            <?php if ($this->proxy_error) : ?>
+                            <div class="swi-alert err">⚠ <div><strong>Vaheserver ei ole kättesaadav.</strong><br><?php echo esc_html($this->proxy_error); ?></div></div>
+                            <?php endif; ?>
+                            <div class="swi-section-title">Vaheserveri ühendus</div>
+                            <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
+                            <div class="swi-card" style="max-width:680px; margin-bottom:28px;">
+                                <?php woocommerce_admin_fields( $conn_s ); ?>
+                            </div>
                             <div class="swi-section-title">Smart Accounts – Üldseaded</div>
                             <div class="swi-section-desc">Smart Accounts Client ID ja Secret seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
                             <div class="swi-card" style="max-width:620px;"><?php woocommerce_admin_fields($sa_s); ?></div>
