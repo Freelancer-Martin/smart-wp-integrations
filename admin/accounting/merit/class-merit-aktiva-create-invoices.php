@@ -167,10 +167,8 @@ class My_Simple_Ajax_Plugin {
             'Email'           => $order->get_billing_email(),
         ];
 
-        $rows        = $this->create_invoice_items_array( $order, $vat_code );
-        $subtotal_ex = (float) $order->get_total() - (float) $order->get_total_tax() - (float) $order->get_shipping_total();
-        $tax_total   = (float) $order->get_total_tax() + (float) $order->get_shipping_total();
-        $grand_total = (float) $order->get_total();
+        $rows      = $this->create_invoice_items_array( $order, $vat_code );
+        $tax_total = round( (float) $order->get_total_tax(), 2 );
 
         $doc_date = $order->get_date_created()
             ? $order->get_date_created()->date( 'Ymd' )
@@ -222,9 +220,8 @@ class My_Simple_Ajax_Plugin {
         foreach ( $order->get_items() as $item ) {
             $product  = $item->get_product();
             $sku      = $product ? $product->get_sku() : '';
-            $price_ex = $product
-                ? (float) $product->get_price()
-                : (float) $item->get_total() / max( 1, (int) $item->get_quantity() );
+            $qty      = max( 1, (int) $item->get_quantity() );
+            $price_ex = round( (float) $item->get_total() / $qty, 4 );
 
             $payload_arrays[] = [
                 'Item'           => [
@@ -233,7 +230,7 @@ class My_Simple_Ajax_Plugin {
                     'Type'        => (int) $this->arve_ridade_tyyp,
                     'UOMName'     => 'tk',
                 ],
-                'Quantity'       => (float) $item->get_quantity(),
+                'Quantity'       => (float) $qty,
                 'Price'          => $price_ex,
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
