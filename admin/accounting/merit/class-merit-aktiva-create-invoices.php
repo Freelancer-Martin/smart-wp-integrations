@@ -167,15 +167,15 @@ class My_Simple_Ajax_Plugin {
             'Email'           => $order->get_billing_email(),
         ];
 
-        $rows      = $this->create_invoice_items_array( $order, $vat_code );
-        $tax_total = round( (float) $order->get_total_tax(), 2 );
+        $rows     = $this->create_invoice_items_array( $order, $vat_code );
+        $tax_paid = round( (float) $order->get_total_tax(), 2 );
 
         $doc_date = $order->get_date_created()
             ? $order->get_date_created()->date( 'Ymd' )
             : gmdate( 'Ymd' );
         $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
 
-        return [
+        $payload = [
             'Customer'       => $customer,
             'AccountingDoc'  => 1,
             'DocDate'        => $doc_date,
@@ -184,10 +184,17 @@ class My_Simple_Ajax_Plugin {
             'DepartmentCode' => $this->department_code ?: null,
             'ReferenceNo'    => null,
             'InvoiceRow'     => $rows,
-            'TaxAmount'      => [
-                [ 'TaxId' => $vat_code, 'Amount' => round( $tax_total, 2 ) ],
-            ],
         ];
+
+        // Lisa TaxAmount ainult siis kui WC on maksu tegelikult arvutanud.
+        // Kui tax_paid = 0 aga TaxId on 22%, jätame Merit ise arvutada.
+        if ( $tax_paid > 0 ) {
+            $payload['TaxAmount'] = [
+                [ 'TaxId' => $vat_code, 'Amount' => $tax_paid ],
+            ];
+        }
+
+        return $payload;
     }
 
     /**
