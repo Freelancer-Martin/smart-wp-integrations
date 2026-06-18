@@ -155,6 +155,7 @@ class My_Simple_Ajax_Plugin {
             'CurrencyCode'    => $order->get_currency(),
             'PaymentDeadLine' => (int) $this->payment_deadline,
             'OverDueCharge'   => 0,
+            'RefNoBase'       => 1,
             'Address'         => $order->get_billing_address_1(),
             'CountryCode'     => $order->get_billing_country() ?: 'EE',
             'City'            => $order->get_billing_city(),
@@ -174,8 +175,15 @@ class My_Simple_Ajax_Plugin {
             $customer['County'] = $county;
         }
 
-        $rows     = $this->create_invoice_items_array( $order, $vat_code );
-        $tax_paid = round( (float) $order->get_total_tax(), 2 );
+        $rows = $this->create_invoice_items_array( $order, $vat_code );
+
+        // TotalAmount = ridade summa ilma maksuta (Merit nõuab valideerimiseks)
+        $total_amount = 0.0;
+        foreach ( $rows as $row ) {
+            $total_amount += (float) $row['Price'] * (float) $row['Quantity'];
+        }
+        $total_amount = round( $total_amount, 2 );
+        $tax_paid     = round( (float) $order->get_total_tax(), 2 );
 
         $doc_date = $order->get_date_created()
             ? $order->get_date_created()->date( 'Ymd' )
@@ -183,24 +191,18 @@ class My_Simple_Ajax_Plugin {
         $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
 
         $payload = [
-            'Customer'      => $customer,
-            'AccountingDoc' => 1,
-            'DocDate'       => $doc_date,
-            'DueDate'       => $due_date,
-            'InvoiceNo'     => $this->arve_eesliides . $order->get_id(),
-            'InvoiceRow'    => $rows,
-        ];
-        if ( $this->department_code ) {
-            $payload['DepartmentCode'] = $this->department_code;
-        }
-
-        // Lisa TaxAmount ainult siis kui WC on maksu tegelikult arvutanud.
-        // Kui tax_paid = 0 aga TaxId on 22%, jätame Merit ise arvutada.
-        if ( $tax_paid > 0 ) {
-            $payload['TaxAmount'] = [
+            'Customer'       => $customer,
+            'DocDate'        => $doc_date,
+            'DueDate'        => $due_date,
+            'InvoiceNo'      => $this->arve_eesliides . $order->get_id(),
+            'DepartmentCode' => $this->department_code ?: '',
+            'InvoiceRow'     => $rows,
+            'TotalAmount'    => $total_amount,
+            'RoundingAmount' => 0.0,
+            'TaxAmount'      => [
                 [ 'TaxId' => $vat_code, 'Amount' => $tax_paid ],
-            ];
-        }
+            ],
+        ];
 
         return $payload;
     }
@@ -250,7 +252,7 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $vat_code_override ?: $this->tax_field,
-                'LocationCode'   => '',
+                'LocationCode'   => '1',
             ];
         }
 
@@ -269,7 +271,7 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $vat_code_override ?: $this->tax_field,
-                'LocationCode'   => '',
+                'LocationCode'   => '1',
             ];
         }
 
