@@ -296,7 +296,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-dot <?php echo $this->proxy_error ? 'err' : 'ok'; ?>"></div>
                             <?php echo $this->proxy_error ? 'Server ei vasta' : 'Server ühendatud'; ?>
                         </div>
-                        <button type="submit" name="save" value="Save changes" class="swi-save-btn">Salvesta</button>
+                        <button type="submit" name="save" value="Save changes" class="swi-save-btn"
+                            onclick="window.onbeforeunload=null;jQuery(window).off('beforeunload');">Salvesta</button>
                     </div>
                 </div>
 
