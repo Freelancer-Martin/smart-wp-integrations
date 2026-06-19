@@ -35,6 +35,7 @@ class SWI_SmartAccounts_Create_Invoices {
         add_action( 'wp_ajax_swi_sa_manual_send',   [ $this, 'handle_manual_send' ] );
         add_action( 'wp_ajax_swi_sa_clear_history',  [ $this, 'handle_clear_history' ] );
         add_action( 'wp_ajax_swi_sa_reset_sent',     [ $this, 'handle_reset_sent' ] );
+        add_action( 'wp_ajax_swi_sa_reset_single',   [ $this, 'handle_reset_single' ] );
         add_action( 'wp_ajax_swi_sa_bulk_send',     [ $this, 'handle_bulk_send' ] );
         add_action( 'wp_ajax_swi_sa_order_send',    [ $this, 'handle_order_send' ] );
 
@@ -473,6 +474,39 @@ class SWI_SmartAccounts_Create_Invoices {
         $d1 = (int) $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sent_smartaccounts' ] );
         $d2 = (int) $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sa_invoice_number' ] );
         wp_send_json_success( [ 'message' => ( $d1 + $d2 ) . ' kirjet eemaldatud.' ] );
+    }
+
+    public function handle_reset_single(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $order_id = (int) ( $_POST['order_id'] ?? 0 );
+        if ( ! $order_id ) {
+            wp_send_json_error( [ 'error' => 'order_id puudub.' ] );
+        }
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            wp_send_json_error( [ 'error' => 'Tellimust ei leitud.' ] );
+        }
+        $order->delete_meta_data( '_swi_sent_smartaccounts' );
+        $order->delete_meta_data( '_swi_sa_invoice_number' );
+        $order->save();
+
+        // Kustuta ka Laravel duplikaadi tabelist
+        $prefix   = get_option( 'swi_smartaccounts_prefix', 'SA' );
+        $ref      = $prefix . $order_id;
+        $api_url  = get_option( 'swi_api_url', '' );
+        $lic_key  = get_option( 'swi_smartaccounts_license_key', get_option( 'swi_license_key', '' ) );
+        if ( $api_url && $lic_key ) {
+            wp_remote_post( trailingslashit( $api_url ) . 'api/sa/reset-reference', [
+                'headers' => [ 'X-License-Token' => $lic_key, 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( [ 'reference_no' => $ref ] ),
+                'timeout' => 10,
+            ] );
+        }
+
+        wp_send_json_success( [ 'message' => 'Tellimus #' . $order_id . ' märgitud puuduvaks.' ] );
     }
 
     /* ─── Payload builder ─── */

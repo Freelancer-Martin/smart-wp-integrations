@@ -944,7 +944,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             html += '<td '+td+'>' + (row.meta_sent||'—') + '</td>';
                                             html += '<td '+td+'><span style="color:'+statusColor+';font-weight:600;">'+statusText+'</span></td>';
                                             html += '<td '+td+'>';
-                                            if (!sent) html += '<button class="button button-small swi-sa-resend-btn" data-id="' + row.order_id + '">Saada</button><span id="swi-sa-resend-result-' + row.order_id + '" style="margin-left:6px;font-size:11.5px;"></span>';
+                                            if (!sent) {
+                                                html += '<button class="button button-small swi-sa-resend-btn" data-id="' + row.order_id + '">Saada</button>';
+                                            } else {
+                                                html += '<button class="button button-small swi-sa-unmark-btn" data-id="' + row.order_id + '" style="color:#dc2626;">Tühista</button>';
+                                            }
+                                            html += '<span id="swi-sa-resend-result-' + row.order_id + '" style="margin-left:6px;font-size:11.5px;"></span>';
                                             html += '</td>';
                                             html += '</tr>';
                                         });
@@ -961,6 +966,27 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                                     var res = document.getElementById('swi-sa-resend-result-' + id);
                                                     if (r.success) { btn.textContent = 'Saadetud'; res.innerHTML = '<span style="color:#16a34a">✓</span>'; }
                                                     else { btn.textContent = 'Uuesti'; res.innerHTML = '<span style="color:#dc2626">✗ ' + ((r.data&&r.data.error)||'Viga') + '</span>'; }
+                                                });
+                                            });
+                                        });
+                                        document.querySelectorAll('.swi-sa-unmark-btn').forEach(function(btn) {
+                                            btn.addEventListener('click', function() {
+                                                var id = btn.dataset.id;
+                                                btn.disabled = true; btn.textContent = '...';
+                                                jQuery.post(ajaxurl, {action: 'swi_sa_reset_single', security: jQuery('#swi_sa_nonce').val(), order_id: id}, function(r) {
+                                                    var res = document.getElementById('swi-sa-resend-result-' + id);
+                                                    if (r.success) {
+                                                        btn.textContent = 'Saada';
+                                                        btn.classList.remove('swi-sa-unmark-btn');
+                                                        btn.classList.add('swi-sa-resend-btn');
+                                                        btn.style.color = '';
+                                                        btn.disabled = false;
+                                                        res.innerHTML = '<span style="color:#6b7280;font-size:11px;">märgitud puuduvaks</span>';
+                                                        btn.addEventListener('click', arguments.callee);
+                                                    } else {
+                                                        btn.disabled = false; btn.textContent = 'Tühista';
+                                                        res.innerHTML = '<span style="color:#dc2626">✗ Viga</span>';
+                                                    }
                                                 });
                                             });
                                         });
