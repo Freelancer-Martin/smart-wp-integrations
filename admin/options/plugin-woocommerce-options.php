@@ -201,17 +201,21 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     display: flex; align-items: stretch;
                     background: var(--swi-dark);
                     border-bottom: 1px solid #1f2937;
-                    padding: 0 24px;
+                    padding: 0 12px;
                     flex-shrink: 0;
+                    overflow-x: auto;
+                    scrollbar-width: none;
                 }
+                .swi-tabs::-webkit-scrollbar { display: none; }
                 .swi-tab {
-                    display: flex; align-items: center; gap: 7px;
-                    padding: 0 18px; height: 42px;
-                    font-size: 12.5px; font-weight: 500;
+                    display: flex; align-items: center; gap: 6px;
+                    padding: 0 13px; height: 42px;
+                    font-size: 12px; font-weight: 500;
                     color: #6b7280; cursor: pointer;
                     border-bottom: 2px solid transparent;
                     transition: color .12s, border-color .12s;
                     white-space: nowrap; user-select: none;
+                    flex-shrink: 0;
                 }
                 .swi-tab:hover { color: #d1d5db; }
                 .swi-tab.active { color: #fff; border-bottom-color: var(--swi-brand); font-weight: 600; }
