@@ -2,9 +2,8 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Kombineeritud "Integratsioonid" kolumn WC tellimuste nimekirjas.
- * Näitab iga lubatud teenuse (Merit / Simplebooks / Smart Accounts) staatust
- * ja "Saada" nuppu saatmata orderite peal.
+ * Üks "Saada ▾" nupp WC tellimuste nimekirjas.
+ * Klõps avab dropdown kus näha iga teenuse staatus ja "Saada" link.
  *
  * Tagasipööramine: kommenteeri välja require + new SWI_Order_Column() rida
  * failis class-smart-wp-integrations.php.
@@ -28,31 +27,25 @@ class SWI_Order_Column {
     private function enabled_services(): array {
         $all = [
             'merit' => [
-                'label'      => 'M',
-                'title'      => 'Merit Aktiva',
-                'option'     => 'smart_wp_integtaion_enable',
-                'meta_sent'  => '_swi_sent_merit',
-                'ajax'       => 'swi_merit_order_send',
-                'nonce'      => 'swi_merit_order_send',
-                'color'      => '#0369a1',
+                'label'     => 'Merit Aktiva',
+                'option'    => 'smart_wp_integtaion_enable',
+                'meta_sent' => '_swi_sent_merit',
+                'ajax'      => 'swi_merit_order_send',
+                'nonce'     => 'swi_merit_order_send',
             ],
             'simplebooks' => [
-                'label'      => 'SB',
-                'title'      => 'Simplebooks',
-                'option'     => 'swi_simplebooks_enable',
-                'meta_sent'  => '_swi_sent_simplebooks',
-                'ajax'       => 'swi_sb_order_send',
-                'nonce'      => 'swi_sb_order_send',
-                'color'      => '#0891b2',
+                'label'     => 'Simplebooks',
+                'option'    => 'swi_simplebooks_enable',
+                'meta_sent' => '_swi_sent_simplebooks',
+                'ajax'      => 'swi_sb_order_send',
+                'nonce'     => 'swi_sb_order_send',
             ],
             'smartaccounts' => [
-                'label'      => 'SA',
-                'title'      => 'Smart Accounts',
-                'option'     => 'swi_smartaccounts_enable',
-                'meta_sent'  => '_swi_sent_smartaccounts',
-                'ajax'       => 'swi_sa_order_send',
-                'nonce'      => 'swi_sa_order_send',
-                'color'      => '#7c3aed',
+                'label'     => 'Smart Accounts',
+                'option'    => 'swi_smartaccounts_enable',
+                'meta_sent' => '_swi_sent_smartaccounts',
+                'ajax'      => 'swi_sa_order_send',
+                'nonce'     => 'swi_sa_order_send',
             ],
         ];
         return array_filter( $all, fn( $s ) => get_option( $s['option'] ) === 'yes' );
@@ -64,12 +57,12 @@ class SWI_Order_Column {
         foreach ( $cols as $key => $label ) {
             $new[ $key ] = $label;
             if ( $key === 'order_status' ) {
-                $new['swi_integrations'] = 'Integratsioonid';
+                $new['swi_integrations'] = 'Saada';
                 $added = true;
             }
         }
         if ( ! $added ) {
-            $new['swi_integrations'] = 'Integratsioonid';
+            $new['swi_integrations'] = 'Saada';
         }
         return $new;
     }
@@ -79,60 +72,94 @@ class SWI_Order_Column {
         $order = is_a( $order_or_id, 'WC_Order' ) ? $order_or_id : wc_get_order( (int) $order_or_id );
         if ( ! $order ) return;
 
-        $parts = [];
+        $all_sent = true;
+        $rows     = [];
+
         foreach ( $this->services as $key => $svc ) {
             $sent  = $order->get_meta( $svc['meta_sent'] );
             $nonce = wp_create_nonce( $svc['nonce'] );
-            $color = esc_attr( $svc['color'] );
             $label = esc_html( $svc['label'] );
-            $title = esc_attr( $svc['title'] );
-            $id    = esc_attr( $order->get_id() );
+            $id    = (int) $order->get_id();
 
             if ( $sent ) {
-                $date = esc_html( date( 'd.m.y', strtotime( $sent ) ) );
-                $parts[] = '<span title="' . $title . ': saadetud ' . esc_attr( date( 'd.m.Y H:i', strtotime( $sent ) ) ) . '" style="display:inline-flex;align-items:center;gap:2px;background:' . $color . '1a;border:1px solid ' . $color . '4d;border-radius:3px;padding:1px 4px;font-size:11px;color:' . $color . ';">'
-                    . '<b>' . $label . '</b> ✓</span>';
+                $date  = esc_html( date( 'd.m.y', strtotime( $sent ) ) );
+                $rows[] = '<div class="swi-dd-row" data-key="' . esc_attr( $key ) . '">'
+                    . '<span style="color:#16a34a;">✓</span> '
+                    . '<span class="swi-dd-label">' . $label . '</span>'
+                    . '<span style="color:#6b7280;font-size:10px;margin-left:4px;">' . $date . '</span>'
+                    . '</div>';
             } else {
-                $parts[] = '<button class="swi-col-send" data-service="' . esc_attr( $key ) . '" data-ajax="' . esc_attr( $svc['ajax'] ) . '" data-nonce="' . $nonce . '" data-id="' . $id . '" title="Saada ' . $title . '" style="display:inline-flex;align-items:center;gap:2px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;padding:1px 5px;font-size:11px;color:#374151;cursor:pointer;line-height:1.4;">'
-                    . '<b style="color:' . $color . ';">' . $label . '</b> <span class="swi-btn-text">↑</span></button>';
+                $all_sent = false;
+                $rows[] = '<div class="swi-dd-row" data-key="' . esc_attr( $key ) . '">'
+                    . '<span style="color:#9ca3af;">–</span> '
+                    . '<span class="swi-dd-label">' . $label . '</span>'
+                    . '<button class="swi-dd-send" data-id="' . $id . '" data-ajax="' . esc_attr( $svc['ajax'] ) . '" data-nonce="' . $nonce . '" data-key="' . esc_attr( $key ) . '">Saada</button>'
+                    . '</div>';
             }
         }
 
-        echo '<div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;">' . implode( '', $parts ) . '</div>';
+        $btn_label = $all_sent ? '✓' : '↑';
+        $btn_style = $all_sent
+            ? 'background:#f0fdf4;border-color:#86efac;color:#16a34a;'
+            : 'background:#f9fafb;border-color:#d1d5db;color:#374151;';
+
+        echo '<div class="swi-dd-wrap" style="position:relative;display:inline-block;">'
+            . '<button class="swi-dd-toggle button button-small" style="' . $btn_style . 'min-width:32px;" title="Integratsioonide staatus">'
+            . $btn_label . ' <span style="font-size:9px;">▾</span></button>'
+            . '<div class="swi-dd-menu" style="display:none;position:absolute;z-index:9999;left:0;top:100%;margin-top:2px;background:#fff;border:1px solid #d1d5db;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:170px;">'
+            . implode( '', $rows )
+            . '</div>'
+            . '</div>';
     }
 
     public function render_scripts(): void {
         $screen = get_current_screen();
         if ( ! $screen || ! str_contains( $screen->id, 'order' ) ) return;
         ?>
+        <style>
+        .swi-dd-row { display:flex;align-items:center;padding:4px 10px;font-size:12px;gap:4px; }
+        .swi-dd-label { flex:1; }
+        .swi-dd-send { font-size:11px;padding:1px 6px;height:auto;line-height:1.5;cursor:pointer; }
+        .swi-dd-send:disabled { opacity:.5; }
+        </style>
         <script>
         jQuery(function($){
-            $(document).on('click', '.swi-col-send', function(e){
-                e.preventDefault();
+            // toggle dropdown
+            $(document).on('click', '.swi-dd-toggle', function(e){
+                e.stopPropagation();
+                var menu = $(this).siblings('.swi-dd-menu');
+                $('.swi-dd-menu').not(menu).hide();
+                menu.toggle();
+            });
+            $(document).on('click', function(){ $('.swi-dd-menu').hide(); });
+
+            // saada nupp
+            $(document).on('click', '.swi-dd-send', function(e){
+                e.stopPropagation();
                 var btn  = $(this);
-                var txt  = btn.find('.swi-btn-text');
-                var id   = btn.data('id');
-                var ajax = btn.data('ajax');
-                var non  = btn.data('nonce');
-                btn.prop('disabled', true);
-                txt.text('…');
-                $.post(ajaxurl, {action: ajax, order_id: id, nonce: non}, function(r){
+                var row  = btn.closest('.swi-dd-row');
+                btn.prop('disabled', true).text('…');
+                $.post(ajaxurl, {
+                    action:   btn.data('ajax'),
+                    order_id: btn.data('id'),
+                    nonce:    btn.data('nonce'),
+                }, function(r){
                     if (r.success) {
                         var today = new Date().toLocaleDateString('et-EE',{day:'2-digit',month:'2-digit',year:'2-digit'});
-                        var label = btn.find('b').text();
-                        var color = btn.find('b').css('color');
-                        btn.replaceWith(
-                            '<span style="display:inline-flex;align-items:center;gap:2px;background:rgba(3,105,161,0.1);border:1px solid rgba(3,105,161,0.3);border-radius:3px;padding:1px 4px;font-size:11px;color:' + color + ';">'
-                            + '<b>' + label + '</b> ✓</span>'
-                        );
+                        row.find('span:first').css('color','#16a34a').text('✓');
+                        btn.replaceWith('<span style="color:#6b7280;font-size:10px;">' + today + '</span>');
+                        // kui kõik saadetud, uuenda toggle nuppu
+                        var wrap  = row.closest('.swi-dd-wrap');
+                        var unsent = wrap.find('.swi-dd-send').length;
+                        if (unsent === 0) {
+                            wrap.find('.swi-dd-toggle').css({background:'#f0fdf4','border-color':'#86efac',color:'#16a34a'}).html('✓ <span style="font-size:9px;">▾</span>');
+                        }
                     } else {
-                        txt.text('!');
-                        btn.prop('disabled', false).css('border-color','#dc2626');
+                        btn.prop('disabled', false).text('!').css('color','#dc2626');
                         btn.attr('title', (r.data && r.data.message) ? r.data.message : 'Viga');
                     }
                 }).fail(function(){
-                    txt.text('!');
-                    btn.prop('disabled', false);
+                    btn.prop('disabled', false).text('!');
                 });
             });
         });
