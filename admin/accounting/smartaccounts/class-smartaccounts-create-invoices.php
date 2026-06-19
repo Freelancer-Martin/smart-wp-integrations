@@ -290,27 +290,59 @@ class SWI_SmartAccounts_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
         }
 
-        $prefix = get_option( 'swi_smartaccounts_prefix', 'SA' );
-        $status = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $orders = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
+        $prefix  = get_option( 'swi_smartaccounts_prefix', 'SA' );
+        $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
+        $api_url = get_option( 'swi_api_url', '' );
+        $lic_key = get_option( 'swi_smartaccounts_license_key', get_option( 'swi_license_key', '' ) );
+        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
+
+        // Küsi SA-st kõik tegelikult olemasolevad arvenumbrid
+        $sa_numbers = [];
+        $sa_check_ok = false;
+        if ( $api_url && $lic_key ) {
+            $resp = wp_remote_get( trailingslashit( $api_url ) . 'api/smartaccounts/invoice-numbers', [
+                'headers' => [ 'X-License-Token' => $lic_key ],
+                'timeout' => 20,
+            ] );
+            if ( ! is_wp_error( $resp ) && wp_remote_retrieve_response_code( $resp ) === 200 ) {
+                $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                if ( isset( $body['invoice_numbers'] ) ) {
+                    $sa_numbers  = array_flip( $body['invoice_numbers'] );
+                    $sa_check_ok = true;
+                }
+            }
+        }
 
         $rows = [];
         foreach ( $orders as $order ) {
             $sent_at   = $order->get_meta( '_swi_sent_smartaccounts' );
             $sa_inv_no = $order->get_meta( '_swi_sa_invoice_number' );
-            $rows[]    = [
-                'order_id'   => $order->get_id(),
-                'inv_no'     => $prefix . $order->get_id(),
-                'sa_inv_no'  => $sa_inv_no ?: null,
-                'total'      => $order->get_total(),
-                'total_html' => wc_price( $order->get_total() ),
-                'in_sa'      => ! empty( $sent_at ) || ! empty( $sa_inv_no ),
-                'meta_sent'  => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
+
+            // Kui SA kontroll õnnestus, kasuta tegelikku seisu; muidu langeta meta järgi
+            if ( $sa_check_ok && $sa_inv_no ) {
+                $in_sa = isset( $sa_numbers[ $sa_inv_no ] );
+            } else {
+                $in_sa = ! empty( $sent_at ) || ! empty( $sa_inv_no );
+            }
+
+            $rows[] = [
+                'order_id'    => $order->get_id(),
+                'inv_no'      => $prefix . $order->get_id(),
+                'sa_inv_no'   => $sa_inv_no ?: null,
+                'total'       => $order->get_total(),
+                'total_html'  => wc_price( $order->get_total() ),
+                'in_sa'       => $in_sa,
+                'meta_sent'   => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
+                'sa_verified' => $sa_check_ok,
             ];
         }
 
         $missing = array_filter( $rows, fn( $r ) => ! $r['in_sa'] );
-        wp_send_json_success( [ 'rows' => $rows, 'missing_count' => count( $missing ) ] );
+        wp_send_json_success( [
+            'rows'          => $rows,
+            'missing_count' => count( $missing ),
+            'sa_check_ok'   => $sa_check_ok,
+        ] );
     }
 
     /* ─── AJAX: saadetamata arve uuesti saatmine (sync paneelist) ─── */
