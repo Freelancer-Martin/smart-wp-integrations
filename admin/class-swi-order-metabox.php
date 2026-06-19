@@ -16,25 +16,28 @@ class SWI_Order_Metabox {
     private function enabled_services(): array {
         $all = [
             'merit' => [
-                'label'     => 'Merit Aktiva',
-                'option'    => 'smart_wp_integtaion_enable',
-                'meta_sent' => '_swi_sent_merit',
-                'ajax'      => 'swi_merit_order_send',
-                'nonce'     => 'swi_merit_order_send',
+                'label'       => 'Merit Aktiva',
+                'option'      => 'smart_wp_integtaion_enable',
+                'meta_sent'   => '_swi_sent_merit',
+                'ajax'        => 'swi_merit_order_send',
+                'nonce_act'   => 'swi_merit_order_send',
+                'nonce_field' => 'nonce',
             ],
             'simplebooks' => [
-                'label'     => 'Simplebooks',
-                'option'    => 'swi_simplebooks_enable',
-                'meta_sent' => '_swi_sent_simplebooks',
-                'ajax'      => 'swi_sb_order_send',
-                'nonce'     => 'swi_sb_order_send',
+                'label'       => 'Simplebooks',
+                'option'      => 'swi_simplebooks_enable',
+                'meta_sent'   => '_swi_sent_simplebooks',
+                'ajax'        => 'swi_sb_order_send',
+                'nonce_act'   => 'my_nonce',
+                'nonce_field' => 'security',
             ],
             'smartaccounts' => [
-                'label'     => 'Smart Accounts',
-                'option'    => 'swi_smartaccounts_enable',
-                'meta_sent' => '_swi_sent_smartaccounts',
-                'ajax'      => 'swi_sa_order_send',
-                'nonce'     => 'swi_sa_order_send',
+                'label'       => 'Smart Accounts',
+                'option'      => 'swi_smartaccounts_enable',
+                'meta_sent'   => '_swi_sent_smartaccounts',
+                'ajax'        => 'swi_sa_order_send',
+                'nonce_act'   => 'my_nonce',
+                'nonce_field' => 'security',
             ],
         ];
         return array_filter( $all, fn( $s ) => get_option( $s['option'] ) === 'yes' );
@@ -86,7 +89,8 @@ class SWI_Order_Metabox {
                     <?php foreach ( $this->services as $key => $svc ) : ?>
                         <option value="<?php echo esc_attr( $key ); ?>"
                             data-ajax="<?php echo esc_attr( $svc['ajax'] ); ?>"
-                            data-nonce="<?php echo esc_attr( wp_create_nonce( $svc['nonce'] ) ); ?>">
+                            data-nonce="<?php echo esc_attr( wp_create_nonce( $svc['nonce_act'] ) ); ?>"
+                            data-nonce-field="<?php echo esc_attr( $svc['nonce_field'] ); ?>">
                             <?php echo esc_html( $svc['label'] ); ?>
                         </option>
                     <?php endforeach; ?>
@@ -114,15 +118,18 @@ class SWI_Order_Metabox {
                 var sel    = $('#swi-mb-service');
                 var opt    = sel.find(':selected');
                 var id     = btn.data('id');
-                var ajax   = opt.data('ajax');
-                var nonce  = opt.data('nonce');
-                var label  = opt.text().trim();
-                var msg    = $('#swi-mb-msg');
+                var ajax        = opt.data('ajax');
+                var nonce       = opt.data('nonce');
+                var nonceField  = opt.data('nonce-field') || 'nonce';
+                var label       = opt.text().trim();
+                var msg         = $('#swi-mb-msg');
+                var postData    = {action: ajax, order_id: id};
+                postData[nonceField] = nonce;
 
                 btn.prop('disabled', true).text('…');
                 msg.css('color','#6b7280').text('Saadan ' + label + '…');
 
-                $.post(ajaxurl, {action: ajax, order_id: id, nonce: nonce}, function(r){
+                $.post(ajaxurl, postData, function(r){
                     btn.prop('disabled', false).text('Saada');
                     if (r.success) {
                         msg.css('color','#16a34a').text('✓ ' + label + ' saadetud');
