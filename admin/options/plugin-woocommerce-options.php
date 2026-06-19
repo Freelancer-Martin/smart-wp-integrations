@@ -1456,7 +1456,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
                                 <input type="hidden" id="swi_stdb_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
                                 <?php $this->render_toggle('swi_stdb_enable', 'Luba Standard Books', $stdb_on); ?>
-                                <?php $this->render_settings_fields( $stdb_s ); ?>
+                                <?php woocommerce_admin_fields( $stdb_s ); ?>
                             </div>
                             <div class="swi-card" style="max-width:860px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">🔌 Ühenduse test</p>
