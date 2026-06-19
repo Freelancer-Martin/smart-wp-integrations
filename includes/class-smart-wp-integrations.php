@@ -174,6 +174,11 @@ class Smart_Wp_Integrations {
 			new SWI_StandardBooks_Create_Invoices();
 		}
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/rik/class-rik-module.php';
+		if ( get_option( 'swi_rik_enable' ) === 'yes' ) {
+			new SWI_Rik_Module();
+		}
+
 		// Kombineeritud meta-box edit order lehel
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-swi-order-metabox.php';
 		new SWI_Order_Metabox();

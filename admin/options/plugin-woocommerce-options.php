@@ -149,6 +149,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             $sa_on          = get_option('swi_smartaccounts_enable')       === 'yes';
             $erply_on       = get_option('swi_erply_enable')               === 'yes';
             $stdb_on        = get_option('swi_stdb_enable')                === 'yes';
+            $rik_on         = get_option('swi_rik_enable')                 === 'yes';
 
             if ( class_exists('LocalApiClient') ) {
                 $this->proxy_error = LocalApiClient::pingServer();
@@ -353,6 +354,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <div class="swi-tab" data-tab="stdb" onclick="swiTab('stdb', this)">
                         📚 Standard Books
                         <span class="swi-tab-badge <?php echo $stdb_on ? 'on' : 'off'; ?>"><?php echo $stdb_on ? 'aktiivne' : 'väljas'; ?></span>
+                    </div>
+                    <div class="swi-tab" data-tab="rik" onclick="swiTab('rik', this)">
+                        🏢 Äriregistri moodul
+                        <span class="swi-tab-badge <?php echo $rik_on ? 'on' : 'off'; ?>"><?php echo $rik_on ? 'aktiivne' : 'väljas'; ?></span>
                     </div>
                 </div>
 
@@ -1685,6 +1690,50 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
+                <!-- ══ TAB: ÄRIREGISTRI MOODUL ══ -->
+                <div class="swi-tabview" id="swi-tab-rik">
+                    <nav class="swi-sidebar">
+                        <div class="swi-sidebar-label">Äriregistri moodul</div>
+                        <div class="swi-nav-item active" data-panel="rik-general" onclick="swiPanel('rik-general', this, 'rik')">
+                            <span class="swi-nav-icon">⚙</span> Seaded
+                        </div>
+                    </nav>
+                    <div class="swi-content">
+                        <div class="swi-panel active" id="swi-panel-rik-general">
+                            <div class="swi-section-title">Äriregistri moodul – Seaded</div>
+                            <div class="swi-section-desc">
+                                Lisab kassasse registrikoodi välja. Kui ostja sisestab registrikoodi, täidetakse automaatselt ettevõtte nimi, KMKR nr ja aadress Eesti äriregistrist.
+                            </div>
+                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                                <?php $this->render_toggle('swi_rik_enable', 'Luba Äriregistri moodul', $rik_on); ?>
+                                <table class="form-table" style="margin-top:16px;">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_rik_license_key">Litsentsi võti</label></th>
+                                        <td>
+                                            <input type="text" id="swi_rik_license_key" name="swi_rik_license_key"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_rik_license_key', '') ); ?>"
+                                                   placeholder="Kopeeri rakenduse litsentsi lehelt">
+                                            <p class="description">Äriregistri mooduli litsentsi võti Smart WP rakendusest.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="swi-alert info" style="max-width:680px;">
+                                ℹ <div>
+                                    <strong>Kuidas töötab:</strong><br>
+                                    Kassas ilmub "Registrikood" väli. Kui ostja sisestab ettevõtte registrikoodi (7–8 numbrit), päritakse automaatselt Eesti äriregistrist:<br>
+                                    <ul style="margin:8px 0 0 16px;">
+                                        <li>Ettevõtte nimi → täidab "Ettevõte" välja</li>
+                                        <li>KMKR number → täidab "KMKR nr" välja</li>
+                                        <li>Registreeritud aadress → täidab "Aadress" välja</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div><!-- .swi-frame -->
 
             <script>
@@ -2203,6 +2252,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_erply_crypto_key',
                 'swi_stdb_license_key',
                 'swi_stdb_crypto_key',
+                'swi_rik_license_key',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
@@ -2303,6 +2353,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_stdb_license_key',
                 'swi_stdb_crypto_key',
                 'swi_stdb_order_status',
+                'swi_rik_enable',
+                'swi_rik_license_key',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
