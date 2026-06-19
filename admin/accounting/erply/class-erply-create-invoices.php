@@ -203,18 +203,64 @@ class SWI_Erply_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
         }
 
-        $status = get_option( 'swi_erply_order_status', 'wc-completed' );
-        $orders = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
-        $rows   = [];
+        $status  = get_option( 'swi_erply_order_status', 'wc-completed' );
+        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
+        $rows    = [];
+        $inv_map = []; // invoice_id → order objekt
+
+        foreach ( $orders as $order ) {
+            $inv_id = (int) $order->get_meta( '_swi_erply_invoice_id' );
+            if ( $inv_id ) {
+                $inv_map[ $inv_id ] = $order;
+            }
+        }
+
+        // Küsi Laravelist millised invoice ID-d veel eksisteerivad Erplys
+        $existing_ids = [];
+        if ( ! empty( $inv_map ) ) {
+            $api_url = get_option( 'smart_wp_integration_server_url', '' );
+            $lic_key = get_option( 'swi_erply_license_key', '' );
+            if ( $api_url && $lic_key ) {
+                $resp = wp_remote_post( trailingslashit( $api_url ) . 'api/erply/verify-invoices', [
+                    'headers' => [
+                        'X-License-Token' => $lic_key,
+                        'Content-Type'    => 'application/json',
+                        'Accept'          => 'application/json',
+                    ],
+                    'body'    => wp_json_encode( [ 'invoice_ids' => array_keys( $inv_map ) ] ),
+                    'timeout' => 15,
+                ] );
+                if ( ! is_wp_error( $resp ) ) {
+                    $data         = json_decode( wp_remote_retrieve_body( $resp ), true );
+                    $existing_ids = (array) ( $data['existing'] ?? [] );
+                }
+            }
+        }
 
         foreach ( $orders as $order ) {
             $sent_at = $order->get_meta( '_swi_sent_erply' );
-            $inv_id  = $order->get_meta( '_swi_erply_invoice_id' );
-            $rows[]  = [
+            $inv_id  = (int) $order->get_meta( '_swi_erply_invoice_id' );
+
+            if ( $inv_id ) {
+                // Teame täpselt: kas arve on Erplys olemas?
+                $in_erply = in_array( $inv_id, $existing_ids, true );
+                // Kui arve on Erplyst kustutatud, puhastame kohaliku oleku automaatselt
+                if ( ! $in_erply && $sent_at ) {
+                    $order->delete_meta_data( '_swi_sent_erply' );
+                    $order->delete_meta_data( '_swi_erply_invoice_id' );
+                    $order->save();
+                    $sent_at = null;
+                }
+            } else {
+                // Pole invoice ID-d — usaldame kohalikku metat
+                $in_erply = ! empty( $sent_at );
+            }
+
+            $rows[] = [
                 'order_id'   => $order->get_id(),
                 'inv_id'     => $inv_id ?: null,
                 'total_html' => wc_price( $order->get_total() ),
-                'in_erply'   => ! empty( $sent_at ) || ! empty( $inv_id ),
+                'in_erply'   => $in_erply,
                 'meta_sent'  => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
             ];
         }
