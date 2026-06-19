@@ -169,6 +169,11 @@ class Smart_Wp_Integrations {
 			new SWI_Erply_Create_Invoices();
 		}
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/accounting/excellent/class-standard-books-create-invoices.php';
+		if ( get_option( 'swi_stdb_enable' ) === 'yes' ) {
+			new SWI_StandardBooks_Create_Invoices();
+		}
+
 		// Kombineeritud meta-box edit order lehel
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-swi-order-metabox.php';
 		new SWI_Order_Metabox();

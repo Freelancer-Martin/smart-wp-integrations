@@ -33,6 +33,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 $this->s_simplebooks( $s ),
                 $this->s_smartaccounts( $s ),
                 $this->s_erply( $s ),
+                $this->s_standard_books( $s ),
                 [
                     [ 'type' => 'swi_country_map',  'id' => $this->opt_country_map ],
                     [ 'type' => 'swi_payment_map',  'id' => $this->opt_payment_map ],
@@ -122,6 +123,18 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             ];
         }
 
+        private function s_standard_books( array $s ): array {
+            return [
+                [ 'type' => 'title', 'id' => 'swi_stdb_conn' ],
+                [ 'name' => 'Litsentsi võti',   'type' => 'text', 'id' => 'swi_stdb_license_key', 'default' => '', 'desc' => 'Standard Books litsentsi võti — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'name' => 'Krüptovõti (HEX)', 'type' => 'text', 'id' => 'swi_stdb_crypto_key',  'default' => '', 'desc' => '64-märgiline HEX — kopeeri rakenduse litsentsi lehelt' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_stdb_conn' ],
+                [ 'type' => 'title', 'id' => 'swi_stdb' ],
+                [ 'name' => 'Saada tellimused staatuses', 'type' => 'select', 'id' => 'swi_stdb_order_status', 'options' => $s, 'default' => 'wc-completed' ],
+                [ 'type' => 'sectionend', 'id' => 'swi_stdb' ],
+            ];
+        }
+
         /* ─── OUTPUT ─── */
         public function output() {
             $s              = function_exists('wc_get_order_statuses') ? wc_get_order_statuses() : [];
@@ -130,10 +143,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             $sb_s           = $this->s_simplebooks( $s );
             $sa_s           = $this->s_smartaccounts( $s );
             $erply_s        = $this->s_erply( $s );
+            $stdb_s         = $this->s_standard_books( $s );
             $merit_on       = get_option('smart_wp_integtaion_enable')    === 'yes';
             $sb_on          = get_option('swi_simplebooks_enable')         === 'yes';
             $sa_on          = get_option('swi_smartaccounts_enable')       === 'yes';
             $erply_on       = get_option('swi_erply_enable')               === 'yes';
+            $stdb_on        = get_option('swi_stdb_enable')                === 'yes';
 
             if ( class_exists('LocalApiClient') ) {
                 $this->proxy_error = LocalApiClient::pingServer();
@@ -334,6 +349,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <div class="swi-tab" data-tab="erply" onclick="swiTab('erply', this)">
                         🛒 Erply
                         <span class="swi-tab-badge <?php echo $erply_on ? 'on' : 'off'; ?>"><?php echo $erply_on ? 'aktiivne' : 'väljas'; ?></span>
+                    </div>
+                    <div class="swi-tab" data-tab="stdb" onclick="swiTab('stdb', this)">
+                        📚 Standard Books
+                        <span class="swi-tab-badge <?php echo $stdb_on ? 'on' : 'off'; ?>"><?php echo $stdb_on ? 'aktiivne' : 'väljas'; ?></span>
                     </div>
                 </div>
 
@@ -1412,6 +1431,260 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
+                <!-- ══ TAB: STANDARD BOOKS ══ -->
+                <div class="swi-tabview" id="swi-tab-stdb">
+                    <nav class="swi-sidebar">
+                        <div class="swi-sidebar-label">Standard Books</div>
+                        <div class="swi-nav-item active" data-panel="stdb-general" onclick="swiPanel('stdb-general', this, 'stdb')">
+                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        </div>
+                        <div class="swi-nav-item" data-panel="stdb-history" onclick="swiPanel('stdb-history', this, 'stdb')">
+                            <span class="swi-nav-icon">📋</span> Saatmise ajalugu
+                        </div>
+                        <div class="swi-nav-item" data-panel="stdb-sync" onclick="swiPanel('stdb-sync', this, 'stdb')">
+                            <span class="swi-nav-icon">🔄</span> Sünkroniseerimise kontroll
+                        </div>
+                        <div class="swi-nav-item" data-panel="stdb-tools" onclick="swiPanel('stdb-tools', this, 'stdb')">
+                            <span class="swi-nav-icon">🔧</span> Tööriistad
+                        </div>
+                    </nav>
+                    <div class="swi-content">
+
+                        <!-- ÜLDSEADED -->
+                        <div class="swi-panel active" id="swi-panel-stdb-general">
+                            <div class="swi-section-title">Standard Books – Üldseaded</div>
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <input type="hidden" id="swi_stdb_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+                                <?php $this->render_toggle('swi_stdb_enable', 'Luba Standard Books', $stdb_on); ?>
+                                <?php $this->render_settings_fields( $stdb_s ); ?>
+                            </div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">🔌 Ühenduse test</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kontrollib kas Standard Books API on kättesaadav ja autentimine töötab.</p>
+                                <button type="button" id="swi-stdb-test-btn" class="button button-secondary">🔌 Testi ühendust</button>
+                                <span id="swi-stdb-test-result" style="margin-left:12px;font-size:13px;"></span>
+                                <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    var btn = document.getElementById('swi-stdb-test-btn');
+                                    if (!btn) return;
+                                    btn.addEventListener('click', function() {
+                                        btn.disabled = true; btn.textContent = '⏳ Kontrollin...';
+                                        var result = document.getElementById('swi-stdb-test-result');
+                                        jQuery.post(ajaxurl, {action:'swi_stdb_connection_test', security:document.getElementById('swi_stdb_tools_nonce').value}, function(r) {
+                                            btn.disabled = false; btn.textContent = '🔌 Testi ühendust';
+                                            if (r.success) {
+                                                result.innerHTML = '<span style="color:#16a34a;font-weight:600;">✓ ' + r.data.message + '</span>';
+                                            } else {
+                                                result.innerHTML = '<span style="color:#dc2626;font-weight:600;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                            }
+                                        }).fail(function(){ btn.disabled=false; btn.textContent='🔌 Testi ühendust'; });
+                                    });
+                                });
+                                </script>
+                            </div>
+                        </div>
+
+                        <!-- SAATMISE AJALUGU -->
+                        <?php $stdb_hist = (array) get_option('swi_stdb_send_history', []); ?>
+                        <div class="swi-panel" id="swi-panel-stdb-history">
+                            <div class="swi-section-title">Standard Books – Saatmise ajalugu</div>
+                            <div class="swi-section-desc">Viimased 50 Standard Books saatmiskatset (uusim üleval).</div>
+                            <div class="swi-card" style="max-width:900px;">
+                                <?php if (empty($stdb_hist)) : ?>
+                                <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
+                                <?php else : ?>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                    <button type="button" id="swi-stdb-clear-history-btn" class="button button-small" style="color:#b32d2e;">Tühista ajalugu</button>
+                                    <span id="swi-stdb-clear-history-result" style="font-size:12px;color:#6b7280;"></span>
+                                </div>
+                                <table class="widefat" id="swi-stdb-history-table">
+                                    <thead><tr><th>Aeg</th><th>Tellimus</th><th>Staatus</th><th>Sõnum</th></tr></thead>
+                                    <tbody>
+                                    <?php foreach ($stdb_hist as $h) : ?>
+                                        <tr>
+                                            <td style="white-space:nowrap;"><?php echo esc_html($h['time']); ?></td>
+                                            <td>#<?php echo esc_html($h['order_id']); ?></td>
+                                            <td><?php echo $h['status'] === 'ok' ? '<span style="color:#16a34a;font-weight:600;">✓ ok</span>' : '<span style="color:#dc2626;font-weight:600;">✗ viga</span>'; ?></td>
+                                            <td style="font-size:12px;"><?php echo esc_html($h['message']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <?php endif; ?>
+                                <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    var clrBtn = document.getElementById('swi-stdb-clear-history-btn');
+                                    if (!clrBtn) return;
+                                    clrBtn.addEventListener('click', function() {
+                                        clrBtn.disabled = true;
+                                        jQuery.post(ajaxurl, {action:'swi_stdb_clear_history', security:document.getElementById('swi_stdb_tools_nonce').value}, function(r) {
+                                            clrBtn.disabled = false;
+                                            if (r.success) { document.querySelector('#swi-panel-stdb-history .swi-card').innerHTML = '<p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>'; }
+                                        });
+                                    });
+                                });
+                                </script>
+                            </div>
+                        </div>
+
+                        <!-- SÜNKRONISEERIMINE -->
+                        <div class="swi-panel" id="swi-panel-stdb-sync">
+                            <div class="swi-section-title">Sünkroniseerimise kontroll</div>
+                            <div class="swi-section-desc">Kontrolli millised tellimused on Standard Booksi saadetud.</div>
+                            <div class="swi-card" style="max-width:900px;">
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button class="button button-secondary" id="swi-stdb-sync-btn">🔄 Kontrolli</button>
+                                    <button class="button button-primary" id="swi-stdb-syncall-btn">⬆ Sync kõik</button>
+                                    <span id="swi-stdb-sync-spinner" style="display:none;margin-left:2px;">⏳</span>
+                                    <span id="swi-stdb-syncall-result" style="font-size:13px;"></span>
+                                </div>
+                                <div id="swi-stdb-sync-result" style="margin-top:14px;"></div>
+                            </div>
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                var nonce = function(){ return document.getElementById('swi_stdb_tools_nonce').value; };
+                                var btn = document.getElementById('swi-stdb-sync-btn');
+                                if (!btn) return;
+                                btn.addEventListener('click', function() {
+                                    btn.disabled = true;
+                                    document.getElementById('swi-stdb-sync-spinner').style.display = 'inline';
+                                    document.getElementById('swi-stdb-sync-result').innerHTML = '';
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_sync_check', security:nonce()}, function(r) {
+                                        btn.disabled = false;
+                                        document.getElementById('swi-stdb-sync-spinner').style.display = 'none';
+                                        if (!r.success) { document.getElementById('swi-stdb-sync-result').innerHTML = '<span style="color:#dc2626">⚠ ' + (r.data&&r.data.error||'Viga') + '</span>'; return; }
+                                        var d = r.data;
+                                        var html = '<p style="margin:0 0 10px;font-size:13px;color:#374151;">Leitud: <strong>' + d.rows.length + '</strong> tellimust, puudub SB-s: <strong style="color:#dc2626">' + d.missing_count + '</strong></p>';
+                                        html += '<div style="overflow-x:auto;"><table class="swi-table" style="width:100%;border-collapse:collapse;font-size:13px;">';
+                                        html += '<thead><tr><th style="text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">WC tellimus</th><th style="text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">SB arve ID</th><th style="text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">Summa</th><th style="text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">Saadetud</th><th style="text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;">Staatus</th><th style="padding:6px 10px;background:#f3f4f6;border-bottom:1px solid #e5e7eb;"></th></tr></thead><tbody>';
+                                        d.rows.forEach(function(row) {
+                                            var status = row.in_stdb
+                                                ? '<span style="color:#16a34a;font-weight:600;">✓ saadetud</span>'
+                                                : '<span style="color:#dc2626;font-weight:600;">— puudub</span>';
+                                            var btn_html = row.in_stdb
+                                                ? '<button class="button button-small swi-stdb-unmark-btn" data-id="'+row.order_id+'" style="color:#dc2626;border-color:#dc2626;">Tühista</button>'
+                                                : '<button class="button button-small swi-stdb-row-send-btn" data-id="'+row.order_id+'">Saada</button>';
+                                            html += '<tr style="border-bottom:1px solid #f3f4f6;">'
+                                                + '<td style="padding:6px 10px;">#'+row.order_id+'</td>'
+                                                + '<td style="padding:6px 10px;font-size:12px;color:#6b7280;">'+(row.inv_id||'—')+'</td>'
+                                                + '<td style="padding:6px 10px;">'+row.total_html+'</td>'
+                                                + '<td style="padding:6px 10px;font-size:12px;color:#6b7280;">'+(row.meta_sent||'—')+'</td>'
+                                                + '<td style="padding:6px 10px;">'+status+'</td>'
+                                                + '<td style="padding:6px 10px;">'+btn_html+'</td>'
+                                                + '</tr>';
+                                        });
+                                        html += '</tbody></table></div>';
+                                        document.getElementById('swi-stdb-sync-result').innerHTML = html;
+                                    }).fail(function(){ btn.disabled=false; document.getElementById('swi-stdb-sync-spinner').style.display='none'; document.getElementById('swi-stdb-sync-result').innerHTML='<span style="color:#dc2626">AJAX viga.</span>'; });
+                                });
+                                // Sync kõik
+                                var syncallBtn = document.getElementById('swi-stdb-syncall-btn');
+                                if (syncallBtn) {
+                                    syncallBtn.addEventListener('click', function() {
+                                        var res = document.getElementById('swi-stdb-syncall-result');
+                                        syncallBtn.disabled = true;
+                                        res.innerHTML = '<span style="color:#6b7280">⏳ Saadan...</span>';
+                                        jQuery.post(ajaxurl, {action:'swi_stdb_bulk_send', security:nonce()}, function(r) {
+                                            syncallBtn.disabled = false;
+                                            if (r.success) {
+                                                var d = r.data;
+                                                res.innerHTML = '<span style="color:'+(d.failed>0?'#d97706':'#16a34a')+';font-weight:600;">'+d.message+'</span>';
+                                                if (d.errors && d.errors.length) res.innerHTML += '<div style="margin-top:6px;font-size:12px;color:#dc2626;">'+d.errors.join('<br>')+'</div>';
+                                            } else {
+                                                res.innerHTML = '<span style="color:#dc2626;font-weight:600;">✗ '+(r.data&&r.data.error||'Viga')+'</span>';
+                                            }
+                                        }).fail(function(){ syncallBtn.disabled=false; res.innerHTML='<span style="color:#dc2626">AJAX viga.</span>'; });
+                                    });
+                                }
+                                jQuery(document).on('click', '.swi-stdb-unmark-btn', function() {
+                                    var b = jQuery(this), id = b.data('id');
+                                    b.prop('disabled', true).text('...');
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_reset_single', security:nonce(), order_id:id}, function(r) {
+                                        if (r.success) { b.closest('tr').find('td:nth-child(5)').html('<span style="color:#dc2626;font-weight:600;">— puudub</span>'); b.replaceWith('<button class="button button-small swi-stdb-row-send-btn" data-id="'+id+'">Saada</button>'); }
+                                        else { b.prop('disabled', false).text('Tühista'); alert(r.data&&r.data.error||'Viga'); }
+                                    });
+                                });
+                                jQuery(document).on('click', '.swi-stdb-row-send-btn', function() {
+                                    var b = jQuery(this), id = b.data('id');
+                                    b.prop('disabled', true).text('...');
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_order_send', security:nonce(), order_id:id}, function(r) {
+                                        if (r.success) { b.closest('tr').find('td:nth-child(5)').html('<span style="color:#16a34a;font-weight:600;">✓ saadetud</span>'); b.replaceWith('<button class="button button-small swi-stdb-unmark-btn" data-id="'+id+'" style="color:#dc2626;border-color:#dc2626;">Tühista</button>'); }
+                                        else { b.prop('disabled', false).text('Saada'); alert(r.data&&r.data.error||'Viga'); }
+                                    });
+                                });
+                            });
+                            </script>
+                        </div>
+
+                        <!-- TÖÖRIISTAD -->
+                        <div class="swi-panel" id="swi-panel-stdb-tools">
+                            <div class="swi-section-title">Standard Books – Tööriistad</div>
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada üksik tellimus Standard Booksi.</p>
+                                <input type="number" id="swi-stdb-manual-id" placeholder="Tellimuse ID" style="width:140px;margin-right:8px;" class="regular-text">
+                                <button class="button" id="swi-stdb-manual-btn">Saada SB-sse</button>
+                                <span id="swi-stdb-manual-result" style="margin-left:10px;font-size:13px;"></span>
+                            </div>
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">JSON eelvaade</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Näita mis payload saadetaks ilma päriselt saatmata.</p>
+                                <input type="number" id="swi-stdb-preview-id" placeholder="Tellimuse ID" style="width:140px;margin-right:8px;" class="regular-text">
+                                <button type="button" id="swi-stdb-preview-btn" class="button button-secondary">Näita JSON</button>
+                                <pre id="swi-stdb-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
+                            </div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühista kõik saatmise märgid</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Eemaldab kõik "_swi_sent_stdb" märgid — kasulik kui Standard Booksist kustutati arved ja soovid uuesti saata.</p>
+                                <button class="button" id="swi-stdb-reset-btn" style="color:#dc2626;border-color:#dc2626;">⚠ Tühista saatmise märgid</button>
+                                <div id="swi-stdb-reset-result" style="margin-top:8px;font-size:13px;"></div>
+                            </div>
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                var nonce = function(){ return document.getElementById('swi_stdb_tools_nonce').value; };
+                                var manBtn = document.getElementById('swi-stdb-manual-btn');
+                                if (manBtn) manBtn.addEventListener('click', function() {
+                                    var id = document.getElementById('swi-stdb-manual-id').value;
+                                    var res = document.getElementById('swi-stdb-manual-result');
+                                    if (!id) { res.innerHTML = '<span style="color:#dc2626">Sisesta tellimuse ID.</span>'; return; }
+                                    manBtn.disabled = true; manBtn.textContent = '...';
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_order_send', security:nonce(), order_id:id}, function(r) {
+                                        manBtn.disabled = false; manBtn.textContent = 'Saada SB-sse';
+                                        res.innerHTML = r.success
+                                            ? '<span style="color:#16a34a;font-weight:600;">✓ ' + r.data.message + '</span>'
+                                            : '<span style="color:#dc2626;font-weight:600;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                    }).fail(function(){ manBtn.disabled=false; manBtn.textContent='Saada SB-sse'; });
+                                });
+                                var prvBtn = document.getElementById('swi-stdb-preview-btn');
+                                if (prvBtn) prvBtn.addEventListener('click', function() {
+                                    var id = document.getElementById('swi-stdb-preview-id').value;
+                                    var pre = document.getElementById('swi-stdb-preview-result');
+                                    if (!id) { pre.style.display='block'; pre.textContent='Sisesta tellimuse ID.'; return; }
+                                    prvBtn.disabled = true; prvBtn.textContent = 'Laen...';
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_preview', security:nonce(), order_id:id}, function(r) {
+                                        prvBtn.disabled = false; prvBtn.textContent = 'Näita JSON';
+                                        pre.style.display = 'block';
+                                        pre.textContent = r.success ? JSON.stringify(r.data.payload, null, 2) : '✗ ' + (r.data&&r.data.error||'Viga');
+                                    }).fail(function(){ prvBtn.disabled=false; prvBtn.textContent='Näita JSON'; });
+                                });
+                                var rstBtn = document.getElementById('swi-stdb-reset-btn');
+                                if (rstBtn) rstBtn.addEventListener('click', function() {
+                                    if (!confirm('Oled kindel? Kõik Standard Books saatmise märgid eemaldatakse.')) return;
+                                    rstBtn.disabled = true;
+                                    jQuery.post(ajaxurl, {action:'swi_stdb_reset_sent', security:nonce()}, function(r) {
+                                        rstBtn.disabled = false;
+                                        document.getElementById('swi-stdb-reset-result').innerHTML = r.success
+                                            ? '<span style="color:#16a34a;">✓ ' + r.data.message + '</span>'
+                                            : '<span style="color:#dc2626;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                    }).fail(function(){ rstBtn.disabled=false; });
+                                });
+                            });
+                            </script>
+                        </div>
+
+                    </div>
+                </div>
+
             </div><!-- .swi-frame -->
 
             <script>
@@ -1928,6 +2201,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartaccounts_payment_days',
                 'swi_erply_license_key',
                 'swi_erply_crypto_key',
+                'swi_stdb_license_key',
+                'swi_stdb_crypto_key',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
@@ -2024,6 +2299,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_erply_license_key',
                 'swi_erply_crypto_key',
                 'swi_erply_order_status',
+                'swi_stdb_enable',
+                'swi_stdb_license_key',
+                'swi_stdb_crypto_key',
+                'swi_stdb_order_status',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
