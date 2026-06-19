@@ -59,7 +59,7 @@ class SWI_Simplebooks_Create_Invoices {
         // Kolumn on kombineeritud — vt class-swi-order-column.php
 
         // Orderi lehel meta-box
-        add_action( 'add_meta_boxes', [ $this, 'register_meta_box' ] );
+        // meta-box on kombineeritud — vt class-swi-order-metabox.php
 
         // Admin notice kinni jäänud orderite kohta
         add_action( 'admin_notices', [ $this, 'show_stuck_notice' ] );
