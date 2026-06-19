@@ -1723,6 +1723,16 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             <p class="description">Äriregistri mooduli litsentsi võti Smart WP rakendusest.</p>
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <th><label for="swi_rik_crypto_key">Krüptovõti (HEX)</label></th>
+                                        <td>
+                                            <input type="text" id="swi_rik_crypto_key" name="swi_rik_crypto_key"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_rik_crypto_key', '') ); ?>"
+                                                   placeholder="64-märgiline HEX">
+                                            <p class="description">64-märgiline HEX — kopeeri rakenduse litsentsi lehelt.</p>
+                                        </td>
+                                    </tr>
                                 </table>
                                 <div style="margin-top:12px;">
                                     <button type="button" id="swi-rik-test-btn" class="button button-secondary">🔌 Testi ühendust</button>
@@ -2341,6 +2351,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_stdb_license_key',
                 'swi_stdb_crypto_key',
                 'swi_rik_license_key',
+                'swi_rik_crypto_key',
                 'swi_rik_reg_label',
                 'swi_rik_vat_label',
             ] as $field ) {
@@ -2445,6 +2456,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_stdb_order_status',
                 'swi_rik_enable',
                 'swi_rik_license_key',
+                'swi_rik_crypto_key',
                 'swi_rik_show_vat',
                 'swi_rik_reg_required',
                 'swi_rik_autofill_address',
