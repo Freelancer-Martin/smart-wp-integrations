@@ -1356,13 +1356,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <pre id="swi-erply-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
-                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Saada kõik puuduvad tellimused</p>
-                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Otsib kõik tellimused mille kohta pole _swi_sent_erply märgitud ja saadab need Erplysse (max 50 korraga).</p>
-                                <button class="button button-primary" id="swi-erply-bulk-btn">▶ Bulk send</button>
-                                <span id="swi-erply-bulk-spinner" style="display:none;margin-left:8px;">⏳</span>
-                                <div id="swi-erply-bulk-result" style="margin-top:10px;font-size:13px;"></div>
-                            </div>
                             <div class="swi-card" style="max-width:860px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühista kõik saatmise märgid</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Eemaldab kõik "_swi_sent_erply" märgid — kasulik kui Erplyst kustutati arved ja soovid uuesti saata.</p>
@@ -1400,24 +1393,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         pre.style.display = 'block';
                                         pre.textContent = r.success ? JSON.stringify(r.data.payload, null, 2) : '✗ ' + (r.data&&r.data.error||'Viga');
                                     }).fail(function(){ prvBtn.disabled=false; prvBtn.textContent='Näita JSON'; });
-                                });
-
-                                // Bulk send
-                                var blkBtn = document.getElementById('swi-erply-bulk-btn');
-                                if (blkBtn) blkBtn.addEventListener('click', function() {
-                                    blkBtn.disabled = true;
-                                    document.getElementById('swi-erply-bulk-spinner').style.display = 'inline';
-                                    document.getElementById('swi-erply-bulk-result').innerHTML = '';
-                                    jQuery.post(ajaxurl, {action:'swi_erply_bulk_send', security:nonce()}, function(r) {
-                                        blkBtn.disabled = false;
-                                        document.getElementById('swi-erply-bulk-spinner').style.display = 'none';
-                                        if (r.success) {
-                                            var d = r.data;
-                                            document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:' + (d.failed>0?'#d97706':'#16a34a') + ';font-weight:600;">' + d.message + '</span>';
-                                        } else {
-                                            document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
-                                        }
-                                    });
                                 });
 
                                 // Reset all
