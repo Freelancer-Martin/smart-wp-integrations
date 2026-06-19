@@ -179,6 +179,15 @@ class Smart_Wp_Integrations {
 			new SWI_Rik_Module();
 		}
 
+		// Smartpost pakiautomaadid
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-shipping.php';
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-admin.php';
+		add_filter( 'woocommerce_shipping_methods', function( $methods ) {
+			$methods['swi_smartpost'] = 'SWI_Smartpost_Shipping';
+			return $methods;
+		} );
+		new SWI_Smartpost_Admin();
+
 		// Kombineeritud meta-box edit order lehel
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-swi-order-metabox.php';
 		new SWI_Order_Metabox();

@@ -150,6 +150,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             $erply_on       = get_option('swi_erply_enable')               === 'yes';
             $stdb_on        = get_option('swi_stdb_enable')                === 'yes';
             $rik_on         = get_option('swi_rik_enable')                 === 'yes';
+            $smartpost_on   = get_option('swi_smartpost_enable')           === 'yes';
 
             if ( class_exists('LocalApiClient') ) {
                 $this->proxy_error = LocalApiClient::pingServer();
@@ -358,6 +359,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <div class="swi-tab" data-tab="rik" onclick="swiTab('rik', this)">
                         🏢 Äriregistri moodul
                         <span class="swi-tab-badge <?php echo $rik_on ? 'on' : 'off'; ?>"><?php echo $rik_on ? 'aktiivne' : 'väljas'; ?></span>
+                    </div>
+                    <div class="swi-tab" data-tab="smartpost" onclick="swiTab('smartpost', this)">
+                        📦 Smartpost
+                        <span class="swi-tab-badge <?php echo $smartpost_on ? 'on' : 'off'; ?>"><?php echo $smartpost_on ? 'aktiivne' : 'väljas'; ?></span>
                     </div>
                 </div>
 
@@ -1832,6 +1837,85 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
+                <!-- ══════════════════════════════════════════════════
+                     SMARTPOST
+                ══════════════════════════════════════════════════ -->
+                <div class="swi-tabview" id="swi-tab-smartpost">
+                    <nav class="swi-sidebar">
+                        <div class="swi-sidebar-label">Smartpost</div>
+                        <div class="swi-nav-item active" data-panel="sp-general" onclick="swiPanel('sp-general', this, 'smartpost')">
+                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        </div>
+                        <div class="swi-nav-item" data-panel="sp-tools" onclick="swiPanel('sp-tools', this, 'smartpost')">
+                            <span class="swi-nav-icon">🔧</span> Tööriistad
+                        </div>
+                    </nav>
+                    <div class="swi-content">
+
+                        <!-- ── Üldseaded ── -->
+                        <div class="swi-panel active" id="swi-panel-sp-general">
+                            <div class="swi-section-title">Smartpost – Üldseaded</div>
+                            <div class="swi-section-desc">
+                                Itella Smartpost pakiautomaadid WooCommerce kassas. Kuvab pakiautomaatide nimekirja otse Itella API-st (EE, LV, LT).
+                            </div>
+                            <input type="hidden" id="swi_sp_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                                <?php $this->render_toggle('swi_smartpost_enable', 'Luba Smartpost pakiautomaadid', $smartpost_on); ?>
+                                <table class="form-table" style="margin-top:16px;">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_smartpost_license_key">Litsentsi võti</label></th>
+                                        <td>
+                                            <input type="text" id="swi_smartpost_license_key" name="swi_smartpost_license_key"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_smartpost_license_key', '') ); ?>"
+                                                   placeholder="Kopeeri rakenduse litsentsi lehelt">
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_crypto_key">Krüptovõti (HEX)</label></th>
+                                        <td>
+                                            <input type="text" id="swi_smartpost_crypto_key" name="swi_smartpost_crypto_key"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_smartpost_crypto_key', '') ); ?>"
+                                                   placeholder="64-märgiline HEX — kopeeri rakenduse litsentsi lehelt">
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="swi-alert info" style="max-width:680px;">
+                                ℹ <div>
+                                    <strong>Kuidas seadistada:</strong><br>
+                                    Pärast salvestamist mine <em>WooCommerce → Seaded → Saatmine → Saatmistsoonid</em> ja lisa <strong>Smartpost pakiautomaat</strong> soovitud tsoonile. Seal saad seadistada hinna ja riigid.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Tööriistad ── -->
+                        <div class="swi-panel" id="swi-panel-sp-tools">
+                            <div class="swi-section-title">Smartpost – Tööriistad</div>
+                            <div class="swi-section-desc">Pakiautomaatide nimekiri laetakse Itella serverist ja salvestatakse 12 tunniks vahemällu.</div>
+                            <div class="swi-card" style="max-width:680px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühjenda pakiautomaatide cache</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kasuta kui pakiautomaatide nimekiri on muutunud ja tahad kohe uuendada.</p>
+                                <button type="button" id="swi-sp-flush-btn" class="button button-secondary">🔄 Tühjenda cache</button>
+                                <span id="swi-sp-flush-result" style="margin-left:10px;font-size:13px;"></span>
+                                <script>
+                                document.getElementById('swi-sp-flush-btn').addEventListener('click', function(){
+                                    var btn = this, res = document.getElementById('swi-sp-flush-result');
+                                    btn.disabled = true; res.textContent = 'Tühjendab...'; res.style.color = '#6b7280';
+                                    jQuery.post(ajaxurl, {action:'swi_smartpost_flush_cache', security:document.getElementById('swi_sp_nonce').value}, function(r){
+                                        btn.disabled = false;
+                                        if(r.success){ res.textContent = '✓ ' + r.data.message; res.style.color = '#16a34a'; }
+                                        else { res.textContent = '✗ Viga'; res.style.color = '#dc2626'; }
+                                    }).fail(function(){ btn.disabled = false; res.textContent = '✗ Serveri viga'; res.style.color = '#dc2626'; });
+                                });
+                                </script>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
             </div><!-- .swi-frame -->
 
             <script>
@@ -2354,6 +2438,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_crypto_key',
                 'swi_rik_reg_label',
                 'swi_rik_vat_label',
+                'swi_smartpost_license_key',
+                'swi_smartpost_crypto_key',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
@@ -2460,6 +2546,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_show_vat',
                 'swi_rik_reg_required',
                 'swi_rik_autofill_address',
+                'swi_smartpost_enable',
+                'swi_smartpost_license_key',
+                'swi_smartpost_crypto_key',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
