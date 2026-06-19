@@ -266,6 +266,10 @@ class SWI_SmartAccounts_Create_Invoices {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_smartaccounts', current_time( 'mysql' ) );
+            $inv_no = $res['response']['result']['smartaccounts']['invoiceNumber'] ?? null;
+            if ( $inv_no ) {
+                $order->update_meta_data( '_swi_sa_invoice_number', $inv_no );
+            }
             $order->save();
             $order->add_order_note( 'Smart Accounts: arve edastatud käsitsi.' );
             swi_sa_log_send_history( $order_id, 'ok', 'Käsitsi saatmine: ' . $payload['number'] );
@@ -393,7 +397,7 @@ class SWI_SmartAccounts_Create_Invoices {
 
         $status   = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
         $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status ] );
-        $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) ), 0, 50 );
+        $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_smartaccounts' ) && ! $o->get_meta( '_swi_sa_invoice_number' ) ), 0, 50 );
 
         // Debug: kui 0 orderit, tagasta info miks
         if ( empty( $orders ) ) {
@@ -421,6 +425,10 @@ class SWI_SmartAccounts_Create_Invoices {
 
             if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
                 $order->update_meta_data( '_swi_sent_smartaccounts', current_time( 'mysql' ) );
+                $inv_no = $res['response']['result']['smartaccounts']['invoiceNumber'] ?? null;
+                if ( $inv_no ) {
+                    $order->update_meta_data( '_swi_sa_invoice_number', $inv_no );
+                }
                 $order->save();
                 swi_sa_log_send_history( $order->get_id(), 'ok', 'Bulk saatmine: ' . $payload['number'] );
                 $sent++;
@@ -459,8 +467,9 @@ class SWI_SmartAccounts_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
         }
         global $wpdb;
-        $deleted = $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sent_smartaccounts' ] );
-        wp_send_json_success( [ 'message' => ( (int) $deleted ) . ' tellimuse saatmise märk eemaldatud.' ] );
+        $d1 = (int) $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sent_smartaccounts' ] );
+        $d2 = (int) $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sa_invoice_number' ] );
+        wp_send_json_success( [ 'message' => ( $d1 + $d2 ) . ' kirjet eemaldatud.' ] );
     }
 
     /* ─── Payload builder ─── */
