@@ -1013,7 +1013,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                                 var d = r.data;
                                                 var color = d.failed > 0 ? '#d97706' : '#16a34a';
                                                 result.innerHTML = '<span style="color:' + color + ';font-weight:600;">' + d.message + '</span>';
-                                                if (d._debug) result.innerHTML += '<br><small style="color:#6b7280;">Status: ' + d._debug.queried_status + ' | Leitud: ' + d._debug.all_found + ' | Staatused: ' + (d._debug.order_statuses||[]).join(', ') + '</small>';
+                                                if (d._debug) result.innerHTML += '<br><small style="color:#6b7280;">Status: ' + d._debug.queried_status + ' | Leitud: ' + d._debug.all_found + ' | Staatused: ' + (d._debug.order_statuses||[]).join(', ') + ' | Meta märgitud: ' + (d._debug.meta_set_count||0) + '</small>';
                                                 if (d.errors && d.errors.length) result.innerHTML += '<br><span style="color:#dc2626;font-size:12px;">' + d.errors.join('<br>') + '</span>';
                                             } else {
                                                 result.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';

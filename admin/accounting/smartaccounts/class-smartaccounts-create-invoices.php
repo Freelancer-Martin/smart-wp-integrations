@@ -429,14 +429,16 @@ class SWI_SmartAccounts_Create_Invoices {
 
         // Debug: kui 0 orderit, tagasta info miks
         if ( empty( $orders ) ) {
-            $all_statuses = array_unique( array_map( fn( $o ) => $o->get_status(), wc_get_orders( [ 'limit' => 10 ] ) ) );
+            $sent_count = count( array_filter( $all, fn( $o ) => (bool) $o->get_meta( '_swi_sent_smartaccounts' ) ) );
+            $statuses   = array_unique( array_map( fn( $o ) => $o->get_status(), $all ) );
             wp_send_json_success( [
                 'sent'    => 0, 'failed' => 0, 'total' => 0,
                 'message' => 'Kõik arved on juba saadetud.',
                 '_debug'  => [
                     'queried_status' => $status,
                     'all_found'      => count( $all ),
-                    'order_statuses' => $all_statuses,
+                    'order_statuses' => $statuses,
+                    'meta_set_count' => $sent_count,
                 ],
             ] );
         }
