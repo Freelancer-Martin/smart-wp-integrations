@@ -142,9 +142,9 @@ class SWI_Order_Metabox {
                         var err = (r.data && r.data.message) ? r.data.message : 'Saatmine ebaõnnestus';
                         msg.css('color','#dc2626').text('✗ ' + err);
                     }
-                }).fail(function(){
+                }).fail(function(xhr){
                     btn.prop('disabled', false).text('Saada');
-                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
+                    msg.css('color','#dc2626').text('✗ HTTP ' + xhr.status + ': ' + (xhr.responseText || 'Ühenduse viga').substring(0,120));
                 });
             });
         });
