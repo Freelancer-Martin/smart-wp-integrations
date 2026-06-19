@@ -1880,12 +1880,48 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                                    placeholder="64-märgiline HEX — kopeeri rakenduse litsentsi lehelt">
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_title">Kuvatav nimi kassas</label></th>
+                                        <td>
+                                            <input type="text" id="swi_smartpost_title" name="swi_smartpost_title"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_smartpost_title', 'Smartpost pakiautomaat') ); ?>">
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_cost">Tarnetasu (€)</label></th>
+                                        <td>
+                                            <input type="text" id="swi_smartpost_cost" name="swi_smartpost_cost"
+                                                   style="width:100px;"
+                                                   value="<?php echo esc_attr( get_option('swi_smartpost_cost', '3.99') ); ?>">
+                                            <p class="description">Sisesta 0 tasuta saatmiseks.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_free_min">Tasuta saatmise lävi (€)</label></th>
+                                        <td>
+                                            <input type="text" id="swi_smartpost_free_min" name="swi_smartpost_free_min"
+                                                   style="width:100px;"
+                                                   value="<?php echo esc_attr( get_option('swi_smartpost_free_min', '') ); ?>"
+                                                   placeholder="Jäta tühjaks">
+                                            <p class="description">Tellimused üle selle summa saavad tasuta saatmise.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Riigid</th>
+                                        <td>
+                                            <?php $sp_countries = (array) get_option('swi_smartpost_countries', ['EE']); ?>
+                                            <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="EE" <?php checked( in_array('EE', $sp_countries, true) ); ?>> Eesti</label>
+                                            <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="LV" <?php checked( in_array('LV', $sp_countries, true) ); ?>> Läti</label>
+                                            <label><input type="checkbox" name="swi_smartpost_countries[]" value="LT" <?php checked( in_array('LT', $sp_countries, true) ); ?>> Leedu</label>
+                                            <p class="description">Milliste riikide tarneaadressidele pakiautomaat kuvatakse.</p>
+                                        </td>
+                                    </tr>
                                 </table>
                             </div>
                             <div class="swi-alert info" style="max-width:680px;">
                                 ℹ <div>
-                                    <strong>Kuidas seadistada:</strong><br>
-                                    Pärast salvestamist mine <em>WooCommerce → Seaded → Saatmine → Saatmistsoonid</em> ja lisa <strong>Smartpost pakiautomaat</strong> soovitud tsoonile. Seal saad seadistada hinna ja riigid.
+                                    Lisa <strong>Smartpost pakiautomaat</strong> WooCommerce saatmistsooni all (<em>WooCommerce → Seaded → Saatmine → Saatmistsoonid</em>), et see kassas kuvataks. Hind ja riigid seadistatakse siin ülal.
                                 </div>
                             </div>
                         </div>
@@ -2440,11 +2476,18 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_vat_label',
                 'swi_smartpost_license_key',
                 'swi_smartpost_crypto_key',
+                'swi_smartpost_title',
+                'swi_smartpost_cost',
+                'swi_smartpost_free_min',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
                 }
             }
+
+            // Smartpost countries (checkboxes → array)
+            $sp_countries = isset( $_POST['swi_smartpost_countries'] ) ? array_map( 'sanitize_text_field', (array) $_POST['swi_smartpost_countries'] ) : [];
+            update_option( 'swi_smartpost_countries', $sp_countries );
 
             // Select fields
             foreach ( [
@@ -2467,6 +2510,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_simplebooks_enable',
                 'swi_smartaccounts_enable',
                 'swi_erply_enable',
+                'swi_stdb_enable',
+                'swi_rik_enable',
+                'swi_rik_show_vat',
+                'swi_rik_reg_required',
+                'swi_rik_autofill_address',
+                'swi_smartpost_enable',
                 'swi_merit_email_notify',
             ] as $field ) {
                 $val = sanitize_text_field( wp_unslash( $_POST[ $field ] ?? 'no' ) );
@@ -2549,6 +2598,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartpost_enable',
                 'swi_smartpost_license_key',
                 'swi_smartpost_crypto_key',
+                'swi_smartpost_title',
+                'swi_smartpost_cost',
+                'swi_smartpost_free_min',
+                'swi_smartpost_countries',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
