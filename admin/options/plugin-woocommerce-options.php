@@ -32,6 +32,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 $this->s_merit( $s ),
                 $this->s_simplebooks( $s ),
                 $this->s_smartaccounts( $s ),
+                $this->s_erply( $s ),
                 [
                     [ 'type' => 'swi_country_map',  'id' => $this->opt_country_map ],
                     [ 'type' => 'swi_payment_map',  'id' => $this->opt_payment_map ],
@@ -1119,6 +1120,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-nav-item active" data-panel="erply-general" onclick="swiPanel('erply-general', this, 'erply')">
                             <span class="swi-nav-icon">⚙</span> Üldseaded
                         </div>
+                        <div class="swi-nav-item" data-panel="erply-history" onclick="swiPanel('erply-history', this, 'erply')">
+                            <span class="swi-nav-icon">📋</span> Saatmise ajalugu
+                        </div>
                         <div class="swi-nav-item" data-panel="erply-sync" onclick="swiPanel('erply-sync', this, 'erply')">
                             <span class="swi-nav-icon">🔄</span> Sünkroniseerimise kontroll
                         </div>
@@ -1148,6 +1152,90 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <?php woocommerce_admin_fields($erply_s); ?>
                             </div>
                             <div class="swi-alert info">ℹ <div>Erply API seaded (URL, kasutajanimi, parool) konfigureeritakse Laravel vaheserveri litsentsi seadetes.</div></div>
+                            <div class="swi-card" style="max-width:860px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Ühenduse test</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kontrollib ühendust Erply API-ga — autentib ja tagastab tulemuse.</p>
+                                <input type="hidden" id="swi_erply_gen_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+                                <button type="button" id="swi-erply-test-btn" class="button button-secondary">🔌 Testi ühendust</button>
+                                <span id="swi-erply-test-result" style="margin-left:12px;font-size:12.5px;"></span>
+                                <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    var btn = document.getElementById('swi-erply-test-btn');
+                                    if (!btn) return;
+                                    btn.addEventListener('click', function() {
+                                        btn.disabled = true;
+                                        btn.textContent = '...';
+                                        document.getElementById('swi-erply-test-result').innerHTML = '';
+                                        jQuery.post(ajaxurl, {action:'swi_erply_connection_test', security:document.getElementById('swi_erply_gen_nonce').value}, function(r) {
+                                            btn.disabled = false;
+                                            btn.textContent = '🔌 Testi ühendust';
+                                            if (r.success) {
+                                                document.getElementById('swi-erply-test-result').innerHTML = '<span style="color:#16a34a;font-weight:600;">✓ ' + r.data.message + '</span>';
+                                            } else {
+                                                document.getElementById('swi-erply-test-result').innerHTML = '<span style="color:#dc2626;font-weight:600;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                            }
+                                        }).fail(function(){ btn.disabled=false; btn.textContent='🔌 Testi ühendust'; });
+                                    });
+                                });
+                                </script>
+                            </div>
+                        </div>
+
+                        <!-- SAATMISE AJALUGU -->
+                        <?php $erply_hist = (array) get_option('swi_erply_send_history', []); ?>
+                        <div class="swi-panel" id="swi-panel-erply-history">
+                            <div class="swi-section-title">Erply – Saatmise ajalugu</div>
+                            <div class="swi-section-desc">Viimased 50 Erply saatmiskatset (uusim üleval).</div>
+                            <div class="swi-card" style="max-width:900px;">
+                                <?php if (empty($erply_hist)) : ?>
+                                <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
+                                <?php else : ?>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                    <button type="button" id="swi-erply-clear-history-btn" class="button button-small" style="color:#b32d2e;">Tühista ajalugu</button>
+                                    <span id="swi-erply-hist-count" style="font-size:12px;color:#6b7280;"><?php echo count($erply_hist); ?> kirjet</span>
+                                </div>
+                                <div style="overflow-x:auto;">
+                                <table class="widefat" id="swi-erply-history-table">
+                                    <thead><tr>
+                                        <th>Aeg</th><th>Tellimus</th><th>Staatus</th><th>Teade</th>
+                                    </tr></thead>
+                                    <tbody>
+                                    <?php foreach ($erply_hist as $i => $row) :
+                                        $ok  = ($row['status'] ?? '') === 'ok';
+                                        $col = $ok ? '#14532d' : '#991b1b';
+                                        $bg  = $ok ? '#dcfce7' : '#fee2e2';
+                                    ?>
+                                    <tr data-row="<?php echo $i; ?>">
+                                        <td style="font-size:12px;"><?php echo esc_html($row['time'] ?? ''); ?></td>
+                                        <td><a href="<?php echo esc_url(admin_url('post.php?post='.intval($row['order_id']??0).'&action=edit')); ?>" target="_blank">#<?php echo intval($row['order_id']??0); ?></a></td>
+                                        <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?php echo $bg; ?>;color:<?php echo $col; ?>;"><?php echo $ok?'✓ ok':'✗ viga'; ?></span></td>
+                                        <td style="font-size:12px;"><?php echo esc_html($row['message'] ?? ''); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                </div>
+                                <div id="swi-erply-hist-pager" style="display:flex;align-items:center;gap:4px;margin-top:12px;flex-wrap:wrap;"></div>
+                                <script>
+                                (function(){
+                                    var PER=10,rows=document.querySelectorAll('#swi-erply-history-table tbody tr'),total=rows.length,pages=Math.ceil(total/PER),cur=1;
+                                    if(pages<=1) return;
+                                    function showPage(p){cur=p;rows.forEach(function(tr,i){tr.style.display=(i>=(p-1)*PER&&i<p*PER)?'':'none';});renderPager();}
+                                    function renderPager(){var nav=document.getElementById('swi-erply-hist-pager');nav.innerHTML='';for(var i=1;i<=pages;i++){var btn=document.createElement('button');btn.type='button';btn.textContent=i;btn.style.cssText='min-width:32px;padding:3px 8px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;font-size:12px;'+(i===cur?'background:#2563eb;color:#fff;border-color:#2563eb;':'background:#fff;color:#374151;');(function(pg){btn.addEventListener('click',function(){showPage(pg);});})(i);nav.appendChild(btn);}}
+                                    showPage(1);
+                                })();
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    var clrBtn = document.getElementById('swi-erply-clear-history-btn');
+                                    if (clrBtn) clrBtn.addEventListener('click', function() {
+                                        if (!confirm('Kustutad kogu Erply saatmise ajaloo?')) return;
+                                        jQuery.post(ajaxurl, {action:'swi_erply_clear_history', security:'<?php echo wp_create_nonce('my_nonce'); ?>'}, function(r) {
+                                            if (r.success) { document.querySelector('#swi-panel-erply-history .swi-card').innerHTML = '<p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>'; }
+                                        });
+                                    });
+                                });
+                                </script>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
                         <!-- SÜNKRONISEERIMISE KONTROLL -->
@@ -1224,52 +1312,98 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- TÖÖRIISTAD -->
                         <div class="swi-panel" id="swi-panel-erply-tools">
                             <div class="swi-section-title">Tööriistad</div>
+                            <input type="hidden" id="swi_erply_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+
                             <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
-                                <input type="hidden" id="swi_erply_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
-                                <h4 style="margin:0 0 8px;font-size:13px;font-weight:600;">Saada kõik puuduvad tellimused</h4>
-                                <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Otsib kõik tellimused mille kohta pole _swi_sent_erply märgitud ja saadab need Erplysse (max 50 korraga).</p>
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada konkreetne tellimus Erplysse (ka juba saadetud).</p>
+                                <input type="number" id="swi-erply-manual-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
+                                <button type="button" id="swi-erply-manual-btn" class="button button-secondary">Saada Erplysse</button>
+                                <span id="swi-erply-manual-result" style="margin-left:10px;font-size:12.5px;"></span>
+                            </div>
+
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Arve JSON eelvaade</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kuva mis andmed Erplysse läheksid enne päris saatmist.</p>
+                                <input type="number" id="swi-erply-preview-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
+                                <button type="button" id="swi-erply-preview-btn" class="button button-secondary">Näita JSON</button>
+                                <pre id="swi-erply-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
+                            </div>
+
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Saada kõik puuduvad tellimused</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Otsib kõik tellimused mille kohta pole _swi_sent_erply märgitud ja saadab need Erplysse (max 50 korraga).</p>
                                 <button class="button button-primary" id="swi-erply-bulk-btn">▶ Bulk send</button>
                                 <span id="swi-erply-bulk-spinner" style="display:none;margin-left:8px;">⏳</span>
                                 <div id="swi-erply-bulk-result" style="margin-top:10px;font-size:13px;"></div>
                             </div>
                             <div class="swi-card" style="max-width:860px;">
-                                <h4 style="margin:0 0 8px;font-size:13px;font-weight:600;">Tühista kõik saatmise märgid</h4>
-                                <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Eemaldab kõik "_swi_sent_erply" märgid — kasulik kui Erplyst kustutati arved ja soovid uuesti saata.</p>
+                                <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühista kõik saatmise märgid</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Eemaldab kõik "_swi_sent_erply" märgid — kasulik kui Erplyst kustutati arved ja soovid uuesti saata.</p>
                                 <button class="button" id="swi-erply-reset-btn" style="color:#dc2626;border-color:#dc2626;">⚠ Tühista saatmise märgid</button>
                                 <div id="swi-erply-reset-result" style="margin-top:8px;font-size:13px;"></div>
                             </div>
                             <script>
                             document.addEventListener('DOMContentLoaded', function() {
+                                var nonce = function(){ return document.getElementById('swi_erply_tools_nonce').value; };
+
+                                // Käsitsi saatmine
+                                var manBtn = document.getElementById('swi-erply-manual-btn');
+                                if (manBtn) manBtn.addEventListener('click', function() {
+                                    var id = document.getElementById('swi-erply-manual-id').value;
+                                    var res = document.getElementById('swi-erply-manual-result');
+                                    if (!id) { res.innerHTML = '<span style="color:#dc2626">Sisesta tellimuse ID.</span>'; return; }
+                                    manBtn.disabled = true; manBtn.textContent = '...';
+                                    jQuery.post(ajaxurl, {action:'swi_erply_order_send', security:nonce(), order_id:id}, function(r) {
+                                        manBtn.disabled = false; manBtn.textContent = 'Saada Erplysse';
+                                        res.innerHTML = r.success
+                                            ? '<span style="color:#16a34a;font-weight:600;">✓ ' + r.data.message + '</span>'
+                                            : '<span style="color:#dc2626;font-weight:600;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                    }).fail(function(){ manBtn.disabled=false; manBtn.textContent='Saada Erplysse'; });
+                                });
+
+                                // Eelvaade
+                                var prvBtn = document.getElementById('swi-erply-preview-btn');
+                                if (prvBtn) prvBtn.addEventListener('click', function() {
+                                    var id = document.getElementById('swi-erply-preview-id').value;
+                                    var pre = document.getElementById('swi-erply-preview-result');
+                                    if (!id) { pre.style.display='block'; pre.textContent='Sisesta tellimuse ID.'; return; }
+                                    prvBtn.disabled = true; prvBtn.textContent = 'Laen...';
+                                    jQuery.post(ajaxurl, {action:'swi_erply_preview', security:nonce(), order_id:id}, function(r) {
+                                        prvBtn.disabled = false; prvBtn.textContent = 'Näita JSON';
+                                        pre.style.display = 'block';
+                                        pre.textContent = r.success ? JSON.stringify(r.data.payload, null, 2) : '✗ ' + (r.data&&r.data.error||'Viga');
+                                    }).fail(function(){ prvBtn.disabled=false; prvBtn.textContent='Näita JSON'; });
+                                });
+
+                                // Bulk send
                                 var blkBtn = document.getElementById('swi-erply-bulk-btn');
-                                if (blkBtn) {
-                                    blkBtn.addEventListener('click', function() {
-                                        blkBtn.disabled = true;
-                                        document.getElementById('swi-erply-bulk-spinner').style.display = 'inline';
-                                        document.getElementById('swi-erply-bulk-result').innerHTML = '';
-                                        jQuery.post(ajaxurl, {action:'swi_erply_bulk_send', security:document.getElementById('swi_erply_tools_nonce').value}, function(r) {
-                                            blkBtn.disabled = false;
-                                            document.getElementById('swi-erply-bulk-spinner').style.display = 'none';
-                                            if (r.success) {
-                                                var d = r.data;
-                                                var color = d.failed > 0 ? '#d97706' : '#16a34a';
-                                                document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:' + color + ';font-weight:600;">' + d.message + '</span>';
-                                            } else {
-                                                document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
-                                            }
-                                        });
+                                if (blkBtn) blkBtn.addEventListener('click', function() {
+                                    blkBtn.disabled = true;
+                                    document.getElementById('swi-erply-bulk-spinner').style.display = 'inline';
+                                    document.getElementById('swi-erply-bulk-result').innerHTML = '';
+                                    jQuery.post(ajaxurl, {action:'swi_erply_bulk_send', security:nonce()}, function(r) {
+                                        blkBtn.disabled = false;
+                                        document.getElementById('swi-erply-bulk-spinner').style.display = 'none';
+                                        if (r.success) {
+                                            var d = r.data;
+                                            document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:' + (d.failed>0?'#d97706':'#16a34a') + ';font-weight:600;">' + d.message + '</span>';
+                                        } else {
+                                            document.getElementById('swi-erply-bulk-result').innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
+                                        }
                                     });
-                                }
+                                });
+
+                                // Reset all
                                 var rstBtn = document.getElementById('swi-erply-reset-btn');
-                                if (rstBtn) {
-                                    rstBtn.addEventListener('click', function() {
-                                        if (!confirm('Kas oled kindel? Kõik Erply saatmise märgid kustutatakse.')) return;
-                                        jQuery.post(ajaxurl, {action:'swi_erply_reset_sent', security:document.getElementById('swi_erply_tools_nonce').value}, function(r) {
-                                            document.getElementById('swi-erply-reset-result').innerHTML = r.success
-                                                ? '<span style="color:#16a34a">✓ ' + r.data.message + '</span>'
-                                                : '<span style="color:#dc2626">⚠ Viga</span>';
-                                        });
+                                if (rstBtn) rstBtn.addEventListener('click', function() {
+                                    if (!confirm('Kas oled kindel? Kõik Erply saatmise märgid kustutatakse.')) return;
+                                    jQuery.post(ajaxurl, {action:'swi_erply_reset_sent', security:nonce()}, function(r) {
+                                        document.getElementById('swi-erply-reset-result').innerHTML = r.success
+                                            ? '<span style="color:#16a34a">✓ ' + r.data.message + '</span>'
+                                            : '<span style="color:#dc2626">⚠ Viga</span>';
                                     });
-                                }
+                                });
                             });
                             </script>
                         </div>
@@ -1791,6 +1925,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartaccounts_crypto_key',
                 'swi_smartaccounts_prefix',
                 'swi_smartaccounts_payment_days',
+                'swi_erply_license_key',
+                'swi_erply_crypto_key',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );

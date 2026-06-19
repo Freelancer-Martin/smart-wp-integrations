@@ -141,6 +141,7 @@ class LocalApiClient {
             'merit'         => [ 'smart_wp_integtaion_license_text', 'smart_wp_integtaion_crypto_text' ],
             'simplebooks'   => [ 'swi_simplebooks_license_key',      'swi_simplebooks_crypto_key' ],
             'smartaccounts' => [ 'swi_smartaccounts_license_key',     'swi_smartaccounts_crypto_key' ],
+            'erply'         => [ 'swi_erply_license_key',            'swi_erply_crypto_key' ],
         ];
         // Tundmatu süsteemi korral tagastatakse Merit võtmed (tagavaravõimalus)
         [ $lk, $ck ] = $map[ $system ] ?? $map['merit'];

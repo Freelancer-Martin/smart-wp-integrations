@@ -3,6 +3,18 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+function swi_erply_log_history( int $order_id, string $status, string $message ): void {
+    $history = get_option( 'swi_erply_send_history', [] );
+    if ( ! is_array( $history ) ) $history = [];
+    array_unshift( $history, [
+        'time'     => current_time( 'Y-m-d H:i:s' ),
+        'order_id' => $order_id,
+        'status'   => $status,
+        'message'  => $message,
+    ] );
+    update_option( 'swi_erply_send_history', array_slice( $history, 0, 50 ) );
+}
+
 class SWI_Erply_Create_Invoices {
 
     public function __construct() {
@@ -10,11 +22,21 @@ class SWI_Erply_Create_Invoices {
         $hook   = 'woocommerce_order_status_' . ( str_starts_with( $status, 'wc-' ) ? substr( $status, 3 ) : $status );
         add_action( $hook, [ $this, 'auto_send_order' ], 20, 1 );
 
-        add_action( 'wp_ajax_swi_erply_bulk_send',    [ $this, 'handle_bulk_send' ] );
-        add_action( 'wp_ajax_swi_erply_order_send',   [ $this, 'handle_order_send' ] );
-        add_action( 'wp_ajax_swi_erply_sync_check',   [ $this, 'handle_sync_check' ] );
-        add_action( 'wp_ajax_swi_erply_reset_sent',   [ $this, 'handle_reset_sent' ] );
-        add_action( 'wp_ajax_swi_erply_reset_single', [ $this, 'handle_reset_single' ] );
+        add_action( 'wp_ajax_swi_erply_bulk_send',        [ $this, 'handle_bulk_send' ] );
+        add_action( 'wp_ajax_swi_erply_order_send',       [ $this, 'handle_order_send' ] );
+        add_action( 'wp_ajax_swi_erply_sync_check',       [ $this, 'handle_sync_check' ] );
+        add_action( 'wp_ajax_swi_erply_reset_sent',       [ $this, 'handle_reset_sent' ] );
+        add_action( 'wp_ajax_swi_erply_reset_single',     [ $this, 'handle_reset_single' ] );
+        add_action( 'wp_ajax_swi_erply_preview',          [ $this, 'handle_preview' ] );
+        add_action( 'wp_ajax_swi_erply_connection_test',  [ $this, 'handle_connection_test' ] );
+        add_action( 'wp_ajax_swi_erply_clear_history',    [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_rik_lookup',             [ $this, 'handle_rik_lookup' ] );
+        add_action( 'wp_ajax_nopriv_swi_rik_lookup',      [ $this, 'handle_rik_lookup' ] );
+
+        add_action( 'woocommerce_after_order_notes', [ $this, 'checkout_fields' ] );
+        add_filter( 'woocommerce_checkout_fields',   [ $this, 'register_checkout_fields' ] );
+        add_action( 'woocommerce_checkout_update_order_meta', [ $this, 'save_checkout_fields' ] );
+        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_rik_script' ] );
     }
 
     /* ─── Automaatne saatmine ─── */
@@ -36,6 +58,10 @@ class SWI_Erply_Create_Invoices {
             }
             $order->save();
             $order->add_order_note( 'Erply: arve edastatud automaatselt.' );
+            swi_erply_log_history( $order_id, 'ok', 'Automaatne saatmine, Erply ID: ' . ( $inv_id ?: '?' ) );
+        } else {
+            $msg = $res['response']['result']['message'] ?? $res['message'] ?? 'Tundmatu viga';
+            swi_erply_log_history( $order_id, 'error', 'Automaatne saatmine ebaõnnestus: ' . $msg );
         }
     }
 
@@ -68,10 +94,12 @@ class SWI_Erply_Create_Invoices {
                     $order->update_meta_data( '_swi_erply_invoice_id', $inv_id );
                 }
                 $order->save();
+                swi_erply_log_history( $order->get_id(), 'ok', 'Bulk saatmine, Erply ID: ' . ( $inv_id ?: '?' ) );
                 $sent++;
             } else {
                 $msg      = $res['response']['result']['message'] ?? $res['message'] ?? 'Tundmatu viga';
                 $errors[] = '#' . $order->get_id() . ': ' . $msg;
+                swi_erply_log_history( $order->get_id(), 'error', 'Bulk saatmine ebaõnnestus: ' . $msg );
                 $failed++;
             }
         }
@@ -107,9 +135,11 @@ class SWI_Erply_Create_Invoices {
             if ( $inv_id ) $order->update_meta_data( '_swi_erply_invoice_id', $inv_id );
             $order->save();
             $order->add_order_note( 'Erply: arve edastatud käsitsi.' );
+            swi_erply_log_history( $order_id, 'ok', 'Käsitsi saatmine, Erply ID: ' . ( $inv_id ?: '?' ) );
             wp_send_json_success( [ 'message' => 'Arve edastatud Erplysse.' ] );
         } else {
             $msg = $res['response']['result']['message'] ?? $res['message'] ?? 'Tundmatu viga';
+            swi_erply_log_history( $order_id, 'error', 'Käsitsi saatmine ebaõnnestus: ' . $msg );
             wp_send_json_error( [ 'error' => $msg ] );
         }
     }
@@ -169,7 +199,160 @@ class SWI_Erply_Create_Invoices {
         $order->delete_meta_data( '_swi_sent_erply' );
         $order->delete_meta_data( '_swi_erply_invoice_id' );
         $order->save();
+
+        $api_url = get_option( 'smart_wp_integration_server_url', '' );
+        $lic_key = get_option( 'swi_erply_license_key', '' );
+        if ( $api_url && $lic_key ) {
+            wp_remote_post( trailingslashit( $api_url ) . 'api/erply/reset-reference', [
+                'headers' => [ 'X-License-Token' => $lic_key, 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( [ 'reference_no' => (string) $order_id ] ),
+                'timeout' => 10,
+            ] );
+        }
+
         wp_send_json_success( [ 'message' => 'Tellimus #' . $order_id . ' märgitud puuduvaks.' ] );
+    }
+
+    /* ─── AJAX: RIK äriregistri otsing ─── */
+
+    public function handle_rik_lookup(): void {
+        check_ajax_referer( 'swi_rik_nonce', 'security' );
+        $reg_code = preg_replace( '/\D/', '', $_POST['reg_code'] ?? '' );
+        if ( ! $reg_code || strlen( $reg_code ) < 7 || strlen( $reg_code ) > 8 ) {
+            wp_send_json_error( [ 'error' => 'Vigane registrikood.' ] );
+        }
+
+        $api_url = get_option( 'smart_wp_integration_server_url', '' );
+        $lic_key = get_option( 'smart_wp_integtaion_license_text', '' );
+
+        if ( ! $api_url || ! $lic_key ) {
+            wp_send_json_error( [ 'error' => 'API seaded puuduvad.' ] );
+        }
+
+        $resp = wp_remote_get( trailingslashit( $api_url ) . 'api/rik/company?reg_code=' . urlencode( $reg_code ), [
+            'headers' => [ 'X-License-Token' => $lic_key, 'Accept' => 'application/json' ],
+            'timeout' => 15,
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            wp_send_json_error( [ 'error' => $resp->get_error_message() ] );
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( empty( $data['ok'] ) ) {
+            wp_send_json_error( [ 'error' => $data['error'] ?? 'Ettevõtet ei leitud.' ] );
+        }
+
+        wp_send_json_success( [
+            'name'    => $data['name']    ?? '',
+            'vat'     => $data['vat']     ?? '',
+            'address' => $data['address'] ?? '',
+        ] );
+    }
+
+    /* ─── Checkout: lisa registrikoodi ja KM-nr väljad ─── */
+
+    public function register_checkout_fields( array $fields ): array {
+        $fields['billing']['billing_reg_no'] = [
+            'label'    => __( 'Registrikood', 'smart-wp-integrations' ),
+            'type'     => 'text',
+            'required' => false,
+            'class'    => [ 'form-row-first' ],
+            'priority' => 110,
+        ];
+        $fields['billing']['billing_vat_no'] = [
+            'label'    => __( 'KMKR nr', 'smart-wp-integrations' ),
+            'type'     => 'text',
+            'required' => false,
+            'class'    => [ 'form-row-last' ],
+            'priority' => 120,
+        ];
+        return $fields;
+    }
+
+    public function checkout_fields(): void {}
+
+    public function save_checkout_fields( int $order_id ): void {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return;
+        if ( ! empty( $_POST['billing_reg_no'] ) ) {
+            $order->update_meta_data( '_billing_reg_no', sanitize_text_field( $_POST['billing_reg_no'] ) );
+        }
+        if ( ! empty( $_POST['billing_vat_no'] ) ) {
+            $order->update_meta_data( '_billing_vat_no', sanitize_text_field( $_POST['billing_vat_no'] ) );
+        }
+        $order->save();
+    }
+
+    /* ─── AJAX: arve JSON eelvaade ─── */
+
+    public function handle_preview(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $order_id = absint( $_POST['order_id'] ?? 0 );
+        if ( ! $order_id ) wp_send_json_error( [ 'error' => 'Order ID puudub.' ] );
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
+        $payload = $this->build_payload( $order );
+        if ( ! $payload ) wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
+        wp_send_json_success( [ 'payload' => $payload ] );
+    }
+
+    /* ─── AJAX: ühenduse test ─── */
+
+    public function handle_connection_test(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $api_url = get_option( 'smart_wp_integration_server_url', '' );
+        $lic_key = get_option( 'swi_erply_license_key', '' );
+        if ( ! $api_url || ! $lic_key ) {
+            wp_send_json_error( [ 'error' => 'Vaheserveri URL või litsentsi võti puudub.' ] );
+        }
+        $resp = wp_remote_get( trailingslashit( $api_url ) . 'api/erply/test', [
+            'headers' => [ 'X-License-Token' => $lic_key, 'Accept' => 'application/json' ],
+            'timeout' => 15,
+        ] );
+        if ( is_wp_error( $resp ) ) {
+            wp_send_json_error( [ 'error' => $resp->get_error_message() ] );
+        }
+        $data = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( ! empty( $data['ok'] ) ) {
+            wp_send_json_success( [ 'message' => $data['message'] ?? 'Ühendus toimib.' ] );
+        } else {
+            wp_send_json_error( [ 'error' => $data['error'] ?? 'Erply autentimine ebaõnnestus.' ] );
+        }
+    }
+
+    /* ─── AJAX: kustuta ajalugu ─── */
+
+    public function handle_clear_history(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        delete_option( 'swi_erply_send_history' );
+        wp_send_json_success( [ 'message' => 'Ajalugu kustutatud.' ] );
+    }
+
+    /* ─── Enqueue RIK checkout JS ─── */
+
+    public function enqueue_rik_script(): void {
+        if ( ! function_exists( 'is_checkout' ) || ! is_checkout() ) return;
+        wp_enqueue_script(
+            'swi-rik-checkout',
+            plugin_dir_url( __FILE__ ) . 'swi-rik-checkout.js',
+            [ 'jquery' ],
+            '1.0.0',
+            true
+        );
+        wp_localize_script( 'swi-rik-checkout', 'swiRik', [
+            'ajaxurl'  => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'swi_rik_nonce' ),
+        ] );
     }
 
     /* ─── Payload builder ─── */
