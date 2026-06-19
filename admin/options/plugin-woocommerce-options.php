@@ -899,7 +899,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- SÜNKRONISEERIMISE KONTROLL -->
                         <div class="swi-panel" id="swi-panel-sa-sync">
                             <div class="swi-section-title">Sünkroniseerimise kontroll</div>
-                            <div class="swi-section-desc">Võrdleb WooCommerce tellimusi Smart Accounts arvetega ja näitab mis puudub.</div>
+                            <div class="swi-section-desc">Näitab milliseid tellimusi pole veel Smart Accountsi saadetud (plugina andmete põhjal).</div>
                             <div class="swi-card" style="max-width:860px;">
                                 <button type="button" class="button button-primary" id="swi-sa-sync-btn">
                                     Kontrolli sünkroniseerimist
@@ -972,6 +972,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- TÖÖRIISTAD -->
                         <div class="swi-panel" id="swi-panel-sa-tools">
                             <div class="swi-section-title">Tööriistad</div>
+
+                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                                <h3 style="margin:0 0 8px;font-size:14px;">Tühista saatmise märgid</h3>
+                                <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Eemaldab kõik "_swi_sent_smartaccounts" märgid — kasulik kui SA-st kustutati arved ja soovid uuesti saata.</p>
+                                <button type="button" class="button" id="swi-sa-reset-btn" onclick="if(!confirm('Kustutad kõik saatmise märgid. Jätka?')) return; this.disabled=true; jQuery.post(ajaxurl, {action:'swi_sa_reset_sent', security:document.getElementById('swi_sa_nonce').value}, function(r){ document.getElementById('swi-sa-reset-btn').disabled=false; document.getElementById('swi-sa-reset-result').innerHTML = r.success ? '<span style=color:#16a34a>✓ '+r.data.message+'</span>' : '<span style=color:#dc2626>✗ Viga</span>'; });">
+                                    Tühista kõik saatmise märgid
+                                </button>
+                                <span id="swi-sa-reset-result" style="margin-left:10px;font-size:13px;"></span>
+                            </div>
 
                             <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
                                 <h3 style="margin:0 0 8px;font-size:14px;">Sünkroniseeri kõik puuduvad</h3>

@@ -110,6 +110,7 @@ class SWI_Order_Metabox {
         if ( ! $screen ) return;
         $valid = [ 'shop_order', 'wc-order', 'woocommerce_page_wc-orders' ];
         if ( ! in_array( $screen->id, $valid, true ) ) return;
+        if ( $screen->id === 'woocommerce_page_wc-orders' && empty( $_GET['id'] ) ) return;
         ?>
         <script>
         jQuery(function($){

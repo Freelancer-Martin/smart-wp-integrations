@@ -33,7 +33,8 @@ class SWI_SmartAccounts_Create_Invoices {
         add_action( 'wp_ajax_swi_sa_sync_check',    [ $this, 'handle_sync_check' ] );
         add_action( 'wp_ajax_swi_sa_sync_resend',   [ $this, 'handle_sync_resend' ] );
         add_action( 'wp_ajax_swi_sa_manual_send',   [ $this, 'handle_manual_send' ] );
-        add_action( 'wp_ajax_swi_sa_clear_history', [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_sa_clear_history',  [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_sa_reset_sent',     [ $this, 'handle_reset_sent' ] );
         add_action( 'wp_ajax_swi_sa_bulk_send',     [ $this, 'handle_bulk_send' ] );
         add_action( 'wp_ajax_swi_sa_order_send',    [ $this, 'handle_order_send' ] );
 
@@ -284,52 +285,19 @@ class SWI_SmartAccounts_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
         }
 
-        $prefix  = get_option( 'swi_smartaccounts_prefix', 'SA' );
-        $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
-
-        $base_url = LocalApiClient::get_base_url_public();
-        $lic_key  = get_option( 'swi_license_key', '' );
-
-        $resp = wp_remote_get( trailingslashit( $base_url ) . 'api/smartaccounts/invoices?per_page=500', [
-            'timeout' => 20,
-            'headers' => [
-                'X-License-Token' => $lic_key,
-                'Accept'          => 'application/json',
-            ],
-        ] );
-
-        if ( is_wp_error( $resp ) ) {
-            wp_send_json_error( [ 'error' => 'Vaheserveri viga: ' . $resp->get_error_message() ] );
-        }
-
-        $code = wp_remote_retrieve_response_code( $resp );
-        if ( $code !== 200 ) {
-            wp_send_json_error( [ 'error' => 'Vaheserveri viga HTTP ' . $code ] );
-        }
-
-        $body     = json_decode( wp_remote_retrieve_body( $resp ), true );
-        $invoices = $body['data'] ?? $body ?? [];
-        $sa_nos   = [];
-
-        foreach ( (array) $invoices as $inv ) {
-            $no = $inv['invoiceNumber'] ?? $inv['number'] ?? $inv['referenceNumber'] ?? $inv['referenceNo'] ?? null;
-            if ( $no ) {
-                $sa_nos[] = (string) $no;
-            }
-        }
+        $prefix = get_option( 'swi_smartaccounts_prefix', 'SA' );
+        $status = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
+        $orders = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
 
         $rows = [];
         foreach ( $orders as $order ) {
-            $inv_no  = $prefix . $order->get_id();
-            $in_sa   = in_array( $inv_no, $sa_nos, true );
             $sent_at = $order->get_meta( '_swi_sent_smartaccounts' );
             $rows[]  = [
-                'order_id'   => $order->get_id(),
-                'inv_no'     => $inv_no,
-                'total'      => wc_price( $order->get_total() ),
-                'in_sa'      => $in_sa,
-                'meta_sent'  => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
+                'order_id'  => $order->get_id(),
+                'inv_no'    => $prefix . $order->get_id(),
+                'total'     => wc_price( $order->get_total() ),
+                'in_sa'     => ! empty( $sent_at ),
+                'meta_sent' => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
             ];
         }
 
@@ -483,6 +451,16 @@ class SWI_SmartAccounts_Create_Invoices {
         }
         delete_option( 'swi_sa_send_history' );
         wp_send_json_success( [ 'message' => 'Ajalugu kustutatud.' ] );
+    }
+
+    public function handle_reset_sent(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        global $wpdb;
+        $deleted = $wpdb->delete( $wpdb->prefix . 'wc_orders_meta', [ 'meta_key' => '_swi_sent_smartaccounts' ] );
+        wp_send_json_success( [ 'message' => ( (int) $deleted ) . ' tellimuse saatmise märk eemaldatud.' ] );
     }
 
     /* ─── Payload builder ─── */
