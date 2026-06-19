@@ -399,7 +399,7 @@ class SWI_SmartAccounts_Create_Invoices {
         }
 
         $status   = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status ] );
+        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
         $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sa_invoice_number' ) ), 0, 50 );
 
         // Debug: kui 0 orderit, tagasta info miks
