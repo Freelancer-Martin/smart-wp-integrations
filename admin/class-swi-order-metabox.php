@@ -41,7 +41,7 @@ class SWI_Order_Metabox {
     }
 
     public function register(): void {
-        foreach ( [ 'shop_order', 'wc-order' ] as $screen ) {
+        foreach ( [ 'shop_order', 'wc-order', 'woocommerce_page_wc-orders' ] as $screen ) {
             add_meta_box(
                 'swi_integrations',
                 'Integratsioonid',
@@ -54,9 +54,13 @@ class SWI_Order_Metabox {
     }
 
     public function render( $post_or_order ): void {
-        $order = ( $post_or_order instanceof WC_Order )
-            ? $post_or_order
-            : wc_get_order( $post_or_order->ID ?? $post_or_order );
+        if ( $post_or_order instanceof WC_Order ) {
+            $order = $post_or_order;
+        } elseif ( is_object( $post_or_order ) && isset( $post_or_order->ID ) ) {
+            $order = wc_get_order( $post_or_order->ID );
+        } else {
+            $order = wc_get_order( (int) $post_or_order );
+        }
         if ( ! $order ) return;
 
         $order_id = $order->get_id();
@@ -99,7 +103,9 @@ class SWI_Order_Metabox {
 
     public function render_script(): void {
         $screen = get_current_screen();
-        if ( ! $screen || ! in_array( $screen->id, [ 'shop_order', 'wc-order' ], true ) ) return;
+        if ( ! $screen ) return;
+        $valid = [ 'shop_order', 'wc-order', 'woocommerce_page_wc-orders' ];
+        if ( ! in_array( $screen->id, $valid, true ) ) return;
         ?>
         <script>
         jQuery(function($){
