@@ -63,6 +63,8 @@ class SWI_Simplebooks_Create_Invoices {
         add_action( 'manage_woocommerce_page_wc-orders_custom_column', [ $this, 'render_order_column' ], 10, 2 );
         add_action( 'manage_shop_order_posts_custom_column',           [ $this, 'render_order_column' ], 10, 2 );
 
+        add_action( 'admin_footer', [ $this, 'render_col_send_script' ] );
+
         // Orderi lehel meta-box
         add_action( 'add_meta_boxes', [ $this, 'register_meta_box' ] );
 
@@ -94,14 +96,38 @@ class SWI_Simplebooks_Create_Invoices {
         if ( ! $order ) return;
         $sent  = $order->get_meta( '_swi_sent_simplebooks' );
         $retry = (int) $order->get_meta( '_swi_simplebooks_retry_count' );
+        $nonce = wp_create_nonce( 'swi_sb_order_send' );
         if ( $sent ) {
             $label = esc_attr( date( 'd.m.Y H:i', strtotime( $sent ) ) );
-            echo '<span title="Saadetud: ' . $label . '" style="color:#16a34a;font-size:15px;cursor:default;">✓</span>';
+            echo '<span title="Saadetud: ' . $label . '" style="color:#16a34a;font-size:13px;cursor:default;">✓ ' . date( 'd.m.y', strtotime( $sent ) ) . '</span>';
         } elseif ( $retry >= 3 ) {
-            echo '<span title="Saatmine ebaõnnestus (3/3 katset)" style="color:#dc2626;font-size:15px;cursor:default;">✗</span>';
+            echo '<button class="button button-small swi-sb-col-send" data-id="' . esc_attr( $order->get_id() ) . '" data-nonce="' . $nonce . '" style="color:#dc2626;" title="Ebaõnnestus — proovi uuesti">↺ Saada</button>';
         } else {
-            echo '<span style="color:#9ca3af;font-size:15px;cursor:default;">—</span>';
+            echo '<button class="button button-small swi-sb-col-send" data-id="' . esc_attr( $order->get_id() ) . '" data-nonce="' . $nonce . '">Saada</button>';
         }
+    }
+
+    public function render_col_send_script(): void {
+        $screen = get_current_screen();
+        if ( ! $screen || ! str_contains( $screen->id, 'order' ) ) return;
+        ?>
+        <script>
+        jQuery(function($){
+            $(document).on('click', '.swi-sb-col-send', function(){
+                var btn = $(this), id = btn.data('id'), nonce = btn.data('nonce');
+                btn.prop('disabled', true).text('...');
+                $.post(ajaxurl, {action:'swi_sb_order_send', order_id:id, nonce:nonce}, function(r){
+                    if (r.success) {
+                        btn.replaceWith('<span style="color:#16a34a;font-size:13px;">✓ ' + (new Date().toLocaleDateString('et-EE',{day:'2-digit',month:'2-digit',year:'2-digit'})) + '</span>');
+                    } else {
+                        btn.prop('disabled', false).text('↺ Viga').css('color','#dc2626');
+                        alert(r.data && r.data.message ? r.data.message : 'Viga');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
     }
 
     /* ─── Meta-box orderi lehel ─── */
