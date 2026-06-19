@@ -295,13 +295,16 @@ class SWI_SmartAccounts_Create_Invoices {
 
         $rows = [];
         foreach ( $orders as $order ) {
-            $sent_at = $order->get_meta( '_swi_sent_smartaccounts' );
-            $rows[]  = [
-                'order_id'  => $order->get_id(),
-                'inv_no'    => $prefix . $order->get_id(),
-                'total'     => wc_price( $order->get_total() ),
-                'in_sa'     => ! empty( $sent_at ),
-                'meta_sent' => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
+            $sent_at   = $order->get_meta( '_swi_sent_smartaccounts' );
+            $sa_inv_no = $order->get_meta( '_swi_sa_invoice_number' );
+            $rows[]    = [
+                'order_id'   => $order->get_id(),
+                'inv_no'     => $prefix . $order->get_id(),
+                'sa_inv_no'  => $sa_inv_no ?: null,
+                'total'      => $order->get_total(),
+                'total_html' => wc_price( $order->get_total() ),
+                'in_sa'      => ! empty( $sent_at ) || ! empty( $sa_inv_no ),
+                'meta_sent'  => $sent_at ? date( 'd.m.Y H:i', strtotime( $sent_at ) ) : null,
             ];
         }
 

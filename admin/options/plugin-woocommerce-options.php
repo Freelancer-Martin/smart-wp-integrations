@@ -929,23 +929,28 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         }
                                         var rows = r.data.rows || [];
                                         var missing = r.data.missing_count || 0;
-                                        if (missing === 0) {
-                                            result.innerHTML = '<div class="swi-alert ok">✓ <div>Kõik arved on sünkroniseeritud.</div></div>';
-                                            return;
-                                        }
-                                        var html = '<div class="swi-alert err">⚠ <div>' + missing + ' arvet puudub Smart Accountsist</div></div>';
-                                        html += '<div style="overflow-x:auto;margin-top:10px;"><table class="swi-table" style="width:100%;border-collapse:collapse;font-size:13px;">';
-                                        html += '<thead><tr><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Arve nr</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Kuupäev</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Summa</th><th style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;">Saadetud</th><th></th></tr></thead><tbody>';
-                                        rows.filter(function(r){ return !r.in_sa; }).forEach(function(row) {
+                                        var td = 'style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"';
+                                        var th = 'style="text-align:left;padding:5px 10px;border-bottom:1px solid #e5e7eb;"';
+                                        var html = '<div style="overflow-x:auto;margin-top:10px;"><table class="swi-table" style="width:100%;border-collapse:collapse;font-size:13px;">';
+                                        html += '<thead><tr><th '+th+'>WC tellimus</th><th '+th+'>SA arvenr</th><th '+th+'>Summa</th><th '+th+'>Saadetud</th><th '+th+'>Staatus</th><th></th></tr></thead><tbody>';
+                                        rows.forEach(function(row) {
+                                            var sent = row.in_sa;
+                                            var statusColor = sent ? '#16a34a' : '#dc2626';
+                                            var statusText  = sent ? '✓ saadetud' : '— puudub';
                                             html += '<tr>';
-                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + row.inv_no + '</td>';
-                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + (row.date||'') + '</td>';
-                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + row.total + '</td>';
-                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;">' + (row.meta_sent||'—') + '</td>';
-                                            html += '<td style="padding:5px 10px;border-bottom:1px solid #f3f4f6;"><button class="button button-small swi-sa-resend-btn" data-id="' + row.order_id + '">Saada</button><span id="swi-sa-resend-result-' + row.order_id + '" style="margin-left:6px;font-size:11.5px;"></span></td>';
+                                            html += '<td '+td+'>' + row.inv_no + '</td>';
+                                            html += '<td '+td+'>' + (row.sa_inv_no || '—') + '</td>';
+                                            html += '<td '+td+'>' + row.total_html + '</td>';
+                                            html += '<td '+td+'>' + (row.meta_sent||'—') + '</td>';
+                                            html += '<td '+td+'><span style="color:'+statusColor+';font-weight:600;">'+statusText+'</span></td>';
+                                            html += '<td '+td+'>';
+                                            if (!sent) html += '<button class="button button-small swi-sa-resend-btn" data-id="' + row.order_id + '">Saada</button><span id="swi-sa-resend-result-' + row.order_id + '" style="margin-left:6px;font-size:11.5px;"></span>';
+                                            html += '</td>';
                                             html += '</tr>';
                                         });
                                         html += '</tbody></table></div>';
+                                        if (missing > 0) html = '<div class="swi-alert err">⚠ <div>' + missing + ' arvet puudub</div></div>' + html;
+                                        else html = '<div class="swi-alert ok">✓ <div>Kõik arved on sünkroniseeritud.</div></div>' + html;
                                         result.innerHTML = html;
                                         document.querySelectorAll('.swi-sa-resend-btn').forEach(function(btn) {
                                             btn.addEventListener('click', function() {
