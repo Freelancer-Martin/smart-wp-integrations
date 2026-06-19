@@ -197,19 +197,28 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 .swi-save-btn:hover { background:var(--swi-brand-dark) !important; }
 
                 /* ── TOP TABS ── */
-                .swi-tabs {
-                    display: flex; align-items: stretch;
+                .swi-tabs-wrap {
                     background: var(--swi-dark);
                     border-bottom: 1px solid #1f2937;
-                    padding: 0 12px;
                     flex-shrink: 0;
-                    overflow-x: auto;
-                    scrollbar-width: none;
                 }
-                .swi-tabs::-webkit-scrollbar { display: none; }
+                .swi-tabs-row {
+                    display: flex; align-items: stretch;
+                    padding: 0 12px;
+                }
+                .swi-tabs-row + .swi-tabs-row {
+                    border-top: 1px solid #1f2937;
+                }
+                .swi-tabs-label {
+                    display: flex; align-items: center;
+                    padding: 0 14px 0 4px;
+                    font-size: 10px; font-weight: 700; letter-spacing: .08em;
+                    text-transform: uppercase; color: #374151;
+                    white-space: nowrap; flex-shrink: 0;
+                }
                 .swi-tab {
                     display: flex; align-items: center; gap: 6px;
-                    padding: 0 13px; height: 42px;
+                    padding: 0 13px; height: 40px;
                     font-size: 12px; font-weight: 500;
                     color: #6b7280; cursor: pointer;
                     border-bottom: 2px solid transparent;
@@ -339,34 +348,42 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 </div>
 
                 <!-- TOP TABS -->
-                <div class="swi-tabs">
-                    <div class="swi-tab active" data-tab="merit" onclick="swiTab('merit', this)">
-                        📊 Merit Aktiva
-                        <span class="swi-tab-badge <?php echo $merit_on ? 'on' : 'off'; ?>"><?php echo $merit_on ? 'aktiivne' : 'väljas'; ?></span>
+                <div class="swi-tabs-wrap">
+                    <!-- Rida 1: Raamatupidamine -->
+                    <div class="swi-tabs-row">
+                        <span class="swi-tabs-label">📑 Raamatupidamine</span>
+                        <div class="swi-tab active" data-tab="merit" onclick="swiTab('merit', this)">
+                            📊 Merit Aktiva
+                            <span class="swi-tab-badge <?php echo $merit_on ? 'on' : 'off'; ?>"><?php echo $merit_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="simplebooks" onclick="swiTab('simplebooks', this)">
+                            📒 Simplebooks
+                            <span class="swi-tab-badge <?php echo $sb_on ? 'on' : 'off'; ?>"><?php echo $sb_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="smartaccounts" onclick="swiTab('smartaccounts', this)">
+                            🧮 Smart Accounts
+                            <span class="swi-tab-badge <?php echo $sa_on ? 'on' : 'off'; ?>"><?php echo $sa_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="erply" onclick="swiTab('erply', this)">
+                            🛒 Erply
+                            <span class="swi-tab-badge <?php echo $erply_on ? 'on' : 'off'; ?>"><?php echo $erply_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="stdb" onclick="swiTab('stdb', this)">
+                            📚 Standard Books
+                            <span class="swi-tab-badge <?php echo $stdb_on ? 'on' : 'off'; ?>"><?php echo $stdb_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="rik" onclick="swiTab('rik', this)">
+                            🏢 Äriregistri moodul
+                            <span class="swi-tab-badge <?php echo $rik_on ? 'on' : 'off'; ?>"><?php echo $rik_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
                     </div>
-                    <div class="swi-tab" data-tab="simplebooks" onclick="swiTab('simplebooks', this)">
-                        📒 Simplebooks
-                        <span class="swi-tab-badge <?php echo $sb_on ? 'on' : 'off'; ?>"><?php echo $sb_on ? 'aktiivne' : 'väljas'; ?></span>
-                    </div>
-                    <div class="swi-tab" data-tab="smartaccounts" onclick="swiTab('smartaccounts', this)">
-                        🧮 Smart Accounts
-                        <span class="swi-tab-badge <?php echo $sa_on ? 'on' : 'off'; ?>"><?php echo $sa_on ? 'aktiivne' : 'väljas'; ?></span>
-                    </div>
-                    <div class="swi-tab" data-tab="erply" onclick="swiTab('erply', this)">
-                        🛒 Erply
-                        <span class="swi-tab-badge <?php echo $erply_on ? 'on' : 'off'; ?>"><?php echo $erply_on ? 'aktiivne' : 'väljas'; ?></span>
-                    </div>
-                    <div class="swi-tab" data-tab="stdb" onclick="swiTab('stdb', this)">
-                        📚 Standard Books
-                        <span class="swi-tab-badge <?php echo $stdb_on ? 'on' : 'off'; ?>"><?php echo $stdb_on ? 'aktiivne' : 'väljas'; ?></span>
-                    </div>
-                    <div class="swi-tab" data-tab="rik" onclick="swiTab('rik', this)">
-                        🏢 Äriregistri moodul
-                        <span class="swi-tab-badge <?php echo $rik_on ? 'on' : 'off'; ?>"><?php echo $rik_on ? 'aktiivne' : 'väljas'; ?></span>
-                    </div>
-                    <div class="swi-tab" data-tab="smartpost" onclick="swiTab('smartpost', this)">
-                        📦 Smartpost
-                        <span class="swi-tab-badge <?php echo $smartpost_on ? 'on' : 'off'; ?>"><?php echo $smartpost_on ? 'aktiivne' : 'väljas'; ?></span>
+                    <!-- Rida 2: Tarne -->
+                    <div class="swi-tabs-row">
+                        <span class="swi-tabs-label">🚚 Tarne</span>
+                        <div class="swi-tab" data-tab="smartpost" onclick="swiTab('smartpost', this)">
+                            📦 Smartpost
+                            <span class="swi-tab-badge <?php echo $smartpost_on ? 'on' : 'off'; ?>"><?php echo $smartpost_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
                     </div>
                 </div>
 
