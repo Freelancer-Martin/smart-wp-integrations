@@ -80,7 +80,8 @@ class My_Simple_Ajax_Plugin {
         add_action( 'wp_ajax_swi_merit_preview_invoice', [ $this, 'handle_preview_invoice' ] );
 
         // Feature 7: Saatmise ajalugu — kustuta
-        add_action( 'wp_ajax_swi_clear_history', [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_clear_history',     [ $this, 'handle_clear_history' ] );
+        add_action( 'wp_ajax_swi_merit_order_send',  [ $this, 'handle_order_send' ] );
 
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
@@ -540,6 +541,33 @@ class My_Simple_Ajax_Plugin {
      * Kutsutakse admin-lehelt "Saada arved" nupuga. Ebaõnnestunud orderid märgitakse
      * retry-ks, et cron saaks neid hiljem automaatselt uuesti proovida.
      */
+    public function handle_order_send(): void {
+        if ( ! check_ajax_referer( 'swi_merit_order_send', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => 'Vigane nonce.' ] );
+        }
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'message' => 'Pole luba.' ] );
+        }
+        $order_id = (int) ( $_POST['order_id'] ?? 0 );
+        $order    = $order_id ? wc_get_order( $order_id ) : null;
+        if ( ! $order ) {
+            wp_send_json_error( [ 'message' => 'Orderit ei leitud.' ] );
+        }
+        $payload = $this->build_payload_for_order( $order );
+        if ( ! $payload ) {
+            wp_send_json_error( [ 'message' => 'Payload loomine ebaõnnestus.' ] );
+        }
+        $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
+        if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
+            $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_merit_retry' );
+            $order->save();
+            wp_send_json_success( [ 'message' => 'Saadetud.' ] );
+        } else {
+            wp_send_json_error( [ 'message' => $res['message'] ?? 'Saatmine ebaõnnestus.' ] );
+        }
+    }
+
     public function handle_ajax(): void {
         if ( ! class_exists( 'WooCommerce' ) ) {
             wp_send_json_error( [ 'error' => 'WooCommerce ei ole aktiivne!' ] );

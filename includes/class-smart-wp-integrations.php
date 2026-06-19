@@ -164,6 +164,10 @@ class Smart_Wp_Integrations {
 			new SWI_SmartAccounts_Create_Invoices();
 		}
 
+		// Kombineeritud integratsioonide kolumn tellimuste nimekirjas
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-swi-order-column.php';
+		new SWI_Order_Column();
+
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
 		 */

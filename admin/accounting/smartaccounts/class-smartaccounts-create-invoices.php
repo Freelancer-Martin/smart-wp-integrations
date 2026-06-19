@@ -37,16 +37,10 @@ class SWI_SmartAccounts_Create_Invoices {
         add_action( 'wp_ajax_swi_sa_bulk_send',     [ $this, 'handle_bulk_send' ] );
         add_action( 'wp_ajax_swi_sa_order_send',    [ $this, 'handle_order_send' ] );
 
-        // Tellimuste nimekirja SA staatus kolumn — HPOS + legacy
-        add_filter( 'manage_woocommerce_page_wc-orders_columns',       [ $this, 'add_order_column' ] );
-        add_filter( 'woocommerce_shop_order_list_table_columns',        [ $this, 'add_order_column' ] );
-        add_filter( 'manage_edit-shop_order_columns',                   [ $this, 'add_order_column' ] );
-        add_action( 'manage_woocommerce_page_wc-orders_custom_column',  [ $this, 'render_order_column' ], 10, 2 );
-        add_action( 'manage_shop_order_posts_custom_column',            [ $this, 'render_order_column' ], 10, 2 );
+        // Kolumn on kombineeritud — vt class-swi-order-column.php
 
         add_action( 'add_meta_boxes', [ $this, 'register_meta_box' ] );
         add_action( 'admin_notices',  [ $this, 'show_stuck_notice' ] );
-        add_action( 'admin_footer',   [ $this, 'render_col_send_script' ] );
     }
 
     /* ─── WC orders kolumn ─── */
