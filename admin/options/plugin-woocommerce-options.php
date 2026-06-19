@@ -203,24 +203,27 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     flex-shrink: 0;
                 }
                 .swi-tabs-row {
-                    display: flex; align-items: stretch;
+                    display: flex; align-items: center;
                     padding: 0 12px;
+                    height: 40px;
                 }
                 .swi-tabs-row + .swi-tabs-row {
                     border-top: 1px solid #1f2937;
                 }
                 .swi-tabs-label {
                     display: flex; align-items: center;
-                    padding: 0 14px 0 4px;
+                    padding: 0 16px 0 4px;
                     font-size: 10px; font-weight: 700; letter-spacing: .08em;
-                    text-transform: uppercase; color: #374151;
+                    text-transform: uppercase; color: #4b5563;
                     white-space: nowrap; flex-shrink: 0;
+                    border-right: 1px solid #1f2937; margin-right: 4px;
+                    height: 100%;
                 }
                 .swi-tab {
                     display: flex; align-items: center; gap: 6px;
-                    padding: 0 13px; height: 40px;
+                    padding: 0 13px; height: 100%;
                     font-size: 12px; font-weight: 500;
-                    color: #6b7280; cursor: pointer;
+                    color: #9ca3af; cursor: pointer;
                     border-bottom: 2px solid transparent;
                     transition: color .12s, border-color .12s;
                     white-space: nowrap; user-select: none;
