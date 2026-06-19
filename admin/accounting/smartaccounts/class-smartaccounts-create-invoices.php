@@ -56,12 +56,12 @@ class SWI_SmartAccounts_Create_Invoices {
         foreach ( $cols as $key => $label ) {
             $new[ $key ] = $label;
             if ( $key === 'order_status' ) {
-                $new['swi_smartaccounts'] = 'SA';
+                $new['swi_smartaccounts'] = 'Smart Accounts';
                 $added = true;
             }
         }
         if ( ! $added ) {
-            $new['swi_smartaccounts'] = 'SA';
+            $new['swi_smartaccounts'] = 'Smart Accounts';
         }
         return $new;
     }

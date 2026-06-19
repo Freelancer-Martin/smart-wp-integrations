@@ -78,12 +78,12 @@ class SWI_Simplebooks_Create_Invoices {
         foreach ( $cols as $key => $label ) {
             $new[ $key ] = $label;
             if ( $key === 'order_status' ) {
-                $new['swi_simplebooks'] = 'SB';
+                $new['swi_simplebooks'] = 'Simplebooks';
                 $added = true;
             }
         }
         if ( ! $added ) {
-            $new['swi_simplebooks'] = 'SB';
+            $new['swi_simplebooks'] = 'Simplebooks';
         }
         return $new;
     }
