@@ -37,6 +37,57 @@ class SWI_Erply_Create_Invoices {
         add_filter( 'woocommerce_checkout_fields',   [ $this, 'register_checkout_fields' ] );
         add_action( 'woocommerce_checkout_update_order_meta', [ $this, 'save_checkout_fields' ] );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_rik_script' ] );
+
+        // Cron: registreeri 10-minutiline intervall ja ajakava
+        add_filter( 'cron_schedules', [ $this, 'add_cron_interval' ] );
+        add_action( 'swi_erply_cron_send', [ $this, 'cron_send_orders' ] );
+        if ( ! wp_next_scheduled( 'swi_erply_cron_send' ) ) {
+            wp_schedule_event( time(), 'swi_10min', 'swi_erply_cron_send' );
+        }
+    }
+
+    public function add_cron_interval( array $schedules ): array {
+        $schedules['swi_10min'] = [
+            'interval' => 600,
+            'display'  => 'Iga 10 minuti järel',
+        ];
+        return $schedules;
+    }
+
+    /* ─── Cron: saada ükshaaval kõik saadetamata tellimused ─── */
+
+    public function cron_send_orders(): void {
+        if ( get_option( 'swi_erply_enable' ) !== 'yes' ) return;
+
+        $status = get_option( 'swi_erply_order_status', 'wc-completed' );
+        $orders = wc_get_orders( [
+            'limit'   => 20,
+            'status'  => $status,
+            'orderby' => 'id',
+            'order'   => 'ASC',
+        ] );
+
+        foreach ( $orders as $order ) {
+            if ( $order->get_meta( '_swi_sent_erply' ) ) continue;
+
+            $payload = $this->build_payload( $order );
+            if ( ! $payload ) continue;
+
+            $res = LocalApiClient::sendEncryptedOrder( $payload, 'erply' );
+            if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+                $order->update_meta_data( '_swi_sent_erply', current_time( 'mysql' ) );
+                $inv_id = $res['response']['result']['invoiceID'] ?? null;
+                if ( $inv_id ) $order->update_meta_data( '_swi_erply_invoice_id', $inv_id );
+                $order->save();
+                swi_erply_log_history( $order->get_id(), 'ok', 'Cron saatmine, Erply ID: ' . ( $inv_id ?: '?' ) );
+            } else {
+                $msg = $res['response']['result']['message'] ?? $res['message'] ?? 'Tundmatu viga';
+                swi_erply_log_history( $order->get_id(), 'error', 'Cron saatmine ebaõnnestus: ' . $msg );
+            }
+
+            // Paus tellimuste vahel et mitte Erply API-t üle koormata
+            usleep( 300000 ); // 0.3s
+        }
     }
 
     /* ─── Automaatne saatmine ─── */

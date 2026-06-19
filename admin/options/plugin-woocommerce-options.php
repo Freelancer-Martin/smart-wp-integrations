@@ -1244,8 +1244,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-desc">Kontrolli millised tellimused on Erplysse saadetud.</div>
                             <div class="swi-card" style="max-width:900px;">
                                 <input type="hidden" id="swi_erply_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
-                                <button class="button button-secondary" id="swi-erply-sync-btn">🔄 Kontrolli</button>
-                                <span id="swi-erply-sync-spinner" style="display:none;margin-left:8px;">⏳</span>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button class="button button-secondary" id="swi-erply-sync-btn">🔄 Kontrolli</button>
+                                    <button class="button button-primary" id="swi-erply-syncall-btn">⬆ Sync kõik</button>
+                                    <span id="swi-erply-sync-spinner" style="display:none;margin-left:2px;">⏳</span>
+                                    <span id="swi-erply-syncall-result" style="font-size:13px;"></span>
+                                </div>
                                 <div id="swi-erply-sync-result" style="margin-top:14px;"></div>
                             </div>
                             <script>
@@ -1287,6 +1291,28 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         document.getElementById('swi-erply-sync-result').innerHTML = html;
                                     }).fail(function(){ btn.disabled=false; document.getElementById('swi-erply-sync-spinner').style.display='none'; document.getElementById('swi-erply-sync-result').innerHTML='<span style="color:#dc2626">AJAX viga.</span>'; });
                                 });
+                                // Sync kõik nupp
+                                var syncallBtn = document.getElementById('swi-erply-syncall-btn');
+                                if (syncallBtn) {
+                                    syncallBtn.addEventListener('click', function() {
+                                        var res = document.getElementById('swi-erply-syncall-result');
+                                        syncallBtn.disabled = true;
+                                        res.innerHTML = '<span style="color:#6b7280">⏳ Saadan...</span>';
+                                        jQuery.post(ajaxurl, {action:'swi_erply_bulk_send', security:document.getElementById('swi_erply_nonce').value}, function(r) {
+                                            syncallBtn.disabled = false;
+                                            if (r.success) {
+                                                var d = r.data;
+                                                var color = d.failed > 0 ? '#d97706' : '#16a34a';
+                                                res.innerHTML = '<span style="color:'+color+';font-weight:600;">'+d.message+'</span>';
+                                                if (d.errors && d.errors.length) {
+                                                    res.innerHTML += '<div style="margin-top:6px;font-size:12px;color:#dc2626;">' + d.errors.join('<br>') + '</div>';
+                                                }
+                                            } else {
+                                                res.innerHTML = '<span style="color:#dc2626;font-weight:600;">✗ ' + (r.data&&r.data.error||'Viga') + '</span>';
+                                            }
+                                        }).fail(function() { syncallBtn.disabled=false; res.innerHTML='<span style="color:#dc2626">AJAX viga.</span>'; });
+                                    });
+                                }
                                 // Tühista nupp
                                 jQuery(document).on('click', '.swi-erply-unmark-btn', function() {
                                     var b = jQuery(this), id = b.data('id');
