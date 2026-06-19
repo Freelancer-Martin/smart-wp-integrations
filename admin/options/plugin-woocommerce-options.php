@@ -1695,15 +1695,21 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     <nav class="swi-sidebar">
                         <div class="swi-sidebar-label">Äriregistri moodul</div>
                         <div class="swi-nav-item active" data-panel="rik-general" onclick="swiPanel('rik-general', this, 'rik')">
-                            <span class="swi-nav-icon">⚙</span> Seaded
+                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        </div>
+                        <div class="swi-nav-item" data-panel="rik-fields" onclick="swiPanel('rik-fields', this, 'rik')">
+                            <span class="swi-nav-icon">📋</span> Kassaväljad
                         </div>
                     </nav>
                     <div class="swi-content">
+
+                        <!-- ── Üldseaded ── -->
                         <div class="swi-panel active" id="swi-panel-rik-general">
-                            <div class="swi-section-title">Äriregistri moodul – Seaded</div>
+                            <div class="swi-section-title">Äriregistri moodul – Üldseaded</div>
                             <div class="swi-section-desc">
                                 Lisab kassasse registrikoodi välja. Kui ostja sisestab registrikoodi, täidetakse automaatselt ettevõtte nimi, KMKR nr ja aadress Eesti äriregistrist.
                             </div>
+                            <input type="hidden" id="swi_rik_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
                             <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
                                 <?php $this->render_toggle('swi_rik_enable', 'Luba Äriregistri moodul', $rik_on); ?>
                                 <table class="form-table" style="margin-top:16px;">
@@ -1718,6 +1724,36 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         </td>
                                     </tr>
                                 </table>
+                                <div style="margin-top:12px;">
+                                    <button type="button" id="swi-rik-test-btn" class="button button-secondary">🔌 Testi ühendust</button>
+                                    <span id="swi-rik-test-result" style="margin-left:10px;font-size:13px;"></span>
+                                </div>
+                                <script>
+                                document.getElementById('swi-rik-test-btn').addEventListener('click', function() {
+                                    var btn = this;
+                                    var res = document.getElementById('swi-rik-test-result');
+                                    btn.disabled = true;
+                                    res.textContent = 'Kontrollin...';
+                                    res.style.color = '#6b7280';
+                                    jQuery.post(ajaxurl, {
+                                        action:   'swi_rik_test',
+                                        security: document.getElementById('swi_rik_nonce').value,
+                                    }, function(r) {
+                                        btn.disabled = false;
+                                        if (r.success) {
+                                            res.textContent = '✓ Ühendus töötab — leitud: ' + (r.data.name || '');
+                                            res.style.color = '#16a34a';
+                                        } else {
+                                            res.textContent = '✗ ' + (r.data.error || 'Viga');
+                                            res.style.color = '#dc2626';
+                                        }
+                                    }).fail(function() {
+                                        btn.disabled = false;
+                                        res.textContent = '✗ Serveri viga';
+                                        res.style.color = '#dc2626';
+                                    });
+                                });
+                                </script>
                             </div>
                             <div class="swi-alert info" style="max-width:680px;">
                                 ℹ <div>
@@ -1731,6 +1767,58 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 </div>
                             </div>
                         </div>
+
+                        <!-- ── Kassaväljad ── -->
+                        <div class="swi-panel" id="swi-panel-rik-fields">
+                            <div class="swi-section-title">Äriregistri moodul – Kassaväljad</div>
+                            <div class="swi-section-desc">Seadista kuidas registrikoodi ja KMKR väljad kassas käituvad.</div>
+                            <div class="swi-card" style="max-width:680px;">
+                                <table class="form-table">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_rik_reg_label">Registrikoodi välja silt</label></th>
+                                        <td>
+                                            <input type="text" id="swi_rik_reg_label" name="swi_rik_reg_label"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_rik_reg_label', 'Registrikood') ); ?>"
+                                                   placeholder="Registrikood">
+                                            <p class="description">Vaikimisi "Registrikood". Kuvatakse kassas välja pealkirjana.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_rik_vat_label">KMKR nr välja silt</label></th>
+                                        <td>
+                                            <input type="text" id="swi_rik_vat_label" name="swi_rik_vat_label"
+                                                   class="regular-text"
+                                                   value="<?php echo esc_attr( get_option('swi_rik_vat_label', 'KMKR nr') ); ?>"
+                                                   placeholder="KMKR nr">
+                                            <p class="description">Vaikimisi "KMKR nr".</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Kuva KMKR nr väli</th>
+                                        <td>
+                                            <?php $this->render_toggle('swi_rik_show_vat', 'Näita KMKR nr välja kassas', get_option('swi_rik_show_vat', 'yes') === 'yes'); ?>
+                                            <p class="description" style="margin-top:6px;">Lülita välja kui e-pood müüb ainult eraisikutele.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Registrikood kohustuslik B2B korral</th>
+                                        <td>
+                                            <?php $this->render_toggle('swi_rik_reg_required', 'Nõua registrikoodi kui "Ettevõte" väli on täidetud', get_option('swi_rik_reg_required', 'no') === 'yes'); ?>
+                                            <p class="description" style="margin-top:6px;">Kui sisse lülitatud, on registrikood kohustuslik äriklientidele.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Täida aadress automaatselt</th>
+                                        <td>
+                                            <?php $this->render_toggle('swi_rik_autofill_address', 'Täida arvelduaadress äriregistrist automaatselt', get_option('swi_rik_autofill_address', 'yes') === 'yes'); ?>
+                                            <p class="description" style="margin-top:6px;">Lülita välja kui kliendid tahavad aadressi ise sisestada.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -2253,6 +2341,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_stdb_license_key',
                 'swi_stdb_crypto_key',
                 'swi_rik_license_key',
+                'swi_rik_reg_label',
+                'swi_rik_vat_label',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
@@ -2355,6 +2445,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_stdb_order_status',
                 'swi_rik_enable',
                 'swi_rik_license_key',
+                'swi_rik_show_vat',
+                'swi_rik_reg_required',
+                'swi_rik_autofill_address',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
