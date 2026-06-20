@@ -24,6 +24,8 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         add_action( 'woocommerce_checkout_process',           [ $this, 'validate_parcel_selection' ] );
         add_action( 'woocommerce_checkout_update_order_meta', [ $this, 'save_parcel_selection' ] );
         add_action( 'wp_footer',                              [ $this, 'enqueue_scripts' ] );
+        // Block checkout salvestamine
+        add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ $this, 'save_block_parcel_selection' ], 10, 2 );
     }
 
     public function calculate_shipping( $package = [] ): void {
@@ -113,30 +115,155 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         }
     }
 
+    public function save_block_parcel_selection( \WC_Order $order, \WP_REST_Request $request ): void {
+        $extensions = $request->get_param( 'extensions' );
+        $pup  = sanitize_text_field( $extensions['swi_smartpost']['pup_code']      ?? '' );
+        $name = sanitize_text_field( $extensions['swi_smartpost']['location_name'] ?? '' );
+        if ( $pup ) {
+            $order->update_meta_data( '_swi_smartpost_pup_code',      $pup );
+            $order->update_meta_data( '_swi_smartpost_location_name', $name );
+        }
+    }
+
     public function enqueue_scripts(): void {
         if ( ! function_exists( 'is_checkout' ) || ! is_checkout() ) return;
+
+        // Laadi asukohad EE jaoks (block checkout vajab neid JS-is JSON-ina)
+        $locations = $this->get_locations( 'EE' );
+        $loc_json  = wp_json_encode( $locations );
         ?>
         <script>
-        jQuery(function($){
-            function swiToggleSelect(){
-                var chosen = $('input[name^="shipping_method"]:checked').val() || '';
-                if(chosen.indexOf('swi_smartpost') !== -1){
-                    $('.swi-smartpost-row').show();
-                } else {
-                    $('.swi-smartpost-row').hide();
-                }
-            }
-            $(document).on('change','input[name^="shipping_method"]', swiToggleSelect);
-            $(document.body).on('updated_checkout', swiToggleSelect);
-            swiToggleSelect();
+        (function(){
+            var SWI_LOCATIONS = <?php echo $loc_json; ?>;
 
-            // Save location name as hidden field for order meta
-            $(document).on('change','#swi_smartpost_pup_code', function(){
-                var name = $(this).find('option:selected').text().trim();
-                $('input[name="swi_smartpost_location_name"]').remove();
-                $('<input type="hidden" name="swi_smartpost_location_name">').val(name).appendTo('form.checkout');
+            /* ── Block checkout ── */
+            var blockRoot = document.querySelector('.wp-block-woocommerce-checkout, .wc-block-checkout');
+            if (blockRoot) {
+                swiInitBlock();
+                return;
+            }
+
+            /* ── Classic checkout ── */
+            if (typeof jQuery === 'undefined') return;
+            jQuery(function($){
+                function swiToggleSelect(){
+                    var chosen = $('input[name^="shipping_method"]:checked').val() || '';
+                    if (chosen.indexOf('swi_smartpost') !== -1) {
+                        $('.swi-smartpost-row').show();
+                    } else {
+                        $('.swi-smartpost-row').hide();
+                    }
+                }
+                $(document).on('change','input[name^="shipping_method"]', swiToggleSelect);
+                $(document.body).on('updated_checkout', swiToggleSelect);
+                swiToggleSelect();
+
+                $(document).on('change','#swi_smartpost_pup_code', function(){
+                    var name = $(this).find('option:selected').text().trim();
+                    $('input[name="swi_smartpost_location_name"]').remove();
+                    $('<input type="hidden" name="swi_smartpost_location_name">').val(name).appendTo('form.checkout');
+                });
             });
-        });
+
+            /* ── Block checkout init ── */
+            function swiInitBlock() {
+                var injected = false;
+
+                function buildSelect() {
+                    var wrap = document.createElement('div');
+                    wrap.id = 'swi-sp-block-wrap';
+                    wrap.style.cssText = 'margin:10px 0 4px;padding:10px;background:#f9f9f9;border:1px solid #e5e7eb;border-radius:4px;';
+
+                    var label = document.createElement('label');
+                    label.htmlFor = 'swi-sp-block-sel';
+                    label.textContent = 'Vali pakiautomaat';
+                    label.style.cssText = 'display:block;font-weight:600;margin-bottom:6px;font-size:13px;';
+
+                    var sel = document.createElement('select');
+                    sel.id = 'swi-sp-block-sel';
+                    sel.style.cssText = 'width:100%;max-width:420px;padding:6px 8px;border:1px solid #ccc;border-radius:3px;font-size:13px;';
+
+                    var def = document.createElement('option');
+                    def.value = ''; def.textContent = '— Vali pakiautomaat —';
+                    sel.appendChild(def);
+
+                    SWI_LOCATIONS.forEach(function(loc){
+                        var opt = document.createElement('option');
+                        opt.value = loc.pupCode;
+                        opt.textContent = loc._display || loc.name || loc.pupCode;
+                        sel.appendChild(opt);
+                    });
+
+                    sel.addEventListener('change', function(){
+                        var code = sel.value;
+                        var name = sel.options[sel.selectedIndex]?.text || '';
+                        // Salvesta WC blocks store kaudu
+                        if (window.wp && window.wp.data) {
+                            try {
+                                window.wp.data.dispatch('wc/store/checkout').__internalSetExtensionData('swi_smartpost', { pup_code: code, location_name: name }, true);
+                            } catch(e) {
+                                // Vanem WC API
+                                try { window.wp.data.dispatch('wc/store/checkout').setExtensionData('swi_smartpost', { pup_code: code, location_name: name }); } catch(e2){}
+                            }
+                        }
+                    });
+
+                    wrap.appendChild(label);
+                    wrap.appendChild(sel);
+                    return wrap;
+                }
+
+                function tryInject() {
+                    if (injected) {
+                        // Uuenda nähtavust
+                        var wrap = document.getElementById('swi-sp-block-wrap');
+                        var isSmartpost = isSmartpostSelected();
+                        if (wrap) wrap.style.display = isSmartpost ? 'block' : 'none';
+                        return;
+                    }
+
+                    // Leia Smartpost saatmisviisi label
+                    var labels = document.querySelectorAll('.wc-block-components-radio-control__option-layout, .wc-block-components-shipping-rates-control__package .wc-block-components-radio-control__label');
+                    var targetEl = null;
+                    labels.forEach(function(el){
+                        if (el.textContent && el.textContent.toLowerCase().indexOf('smartpost') !== -1) {
+                            targetEl = el.closest('.wc-block-components-radio-control__option') || el.parentElement;
+                        }
+                    });
+
+                    if (!targetEl) return;
+
+                    var sel = buildSelect();
+                    sel.style.display = isSmartpostSelected() ? 'block' : 'none';
+                    targetEl.appendChild(sel);
+                    injected = true;
+                }
+
+                function isSmartpostSelected() {
+                    var inputs = document.querySelectorAll('input[type="radio"][id*="shipping"]');
+                    var found = false;
+                    inputs.forEach(function(inp){
+                        if (inp.checked && inp.value && inp.value.indexOf('swi_smartpost') !== -1) found = true;
+                        // WC blocks kasutab label tekstist
+                        var label = document.querySelector('label[for="' + inp.id + '"]');
+                        if (inp.checked && label && label.textContent.toLowerCase().indexOf('smartpost') !== -1) found = true;
+                    });
+                    return found;
+                }
+
+                // MutationObserver — vaata DOM muutusi
+                var obs = new MutationObserver(function(){ tryInject(); });
+                obs.observe(document.body, { childList: true, subtree: true });
+                tryInject();
+
+                // Kliki kuulaja saatmisviisi valikul
+                document.addEventListener('change', function(e){
+                    if (e.target && e.target.name && e.target.name.indexOf('radio-control') !== -1) {
+                        setTimeout(tryInject, 50);
+                    }
+                });
+            }
+        })();
         </script>
         <?php
     }
