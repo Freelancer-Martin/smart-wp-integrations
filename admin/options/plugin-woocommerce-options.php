@@ -285,7 +285,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
                 .swi-section-title { font-size:15px; font-weight:700; color:var(--swi-text); margin:0 0 4px; }
                 .swi-section-desc  { font-size:12px; color:#6b7280; margin:0 0 20px; line-height:1.5; }
-                .swi-card { background:#fff; border:1px solid var(--swi-border); border-radius:10px; padding:22px 24px; margin-bottom:18px; }
+                .swi-card { background:#fff; border:1px solid var(--swi-border); border-radius:10px; padding:22px 28px; margin-bottom:18px; max-width:980px; }
 
                 .swi-alert { display:flex; align-items:flex-start; gap:10px; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:12.5px; line-height:1.5; }
                 .swi-alert.err  { background:rgba(239,68,68,.07);  border:1px solid rgba(239,68,68,.18);  color:#991b1b; }
@@ -445,7 +445,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
+                            <div class="swi-card" style="margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Merit Aktiva – Üldseaded</div>
@@ -461,7 +461,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
                             <div class="swi-section-title" style="margin-top:24px;">Sünkroniseerimine</div>
                             <div class="swi-section-desc">Võrdle WooCommerce tellimusi Merit Aktiva arvetega. Puuduvaid arveid saad siit uuesti saata.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <button type="button" id="swi-sync-btn" class="button button-secondary">Kontrolli sünkroniseerimist</button>
                                 <span id="swi-sync-spinner" style="display:none;margin-left:10px;">Laen...</span>
                                 <div id="swi-sync-result" style="margin-top:16px;"></div>
@@ -469,7 +469,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php // Feature 6: Arve eelvaade ?>
                             <div class="swi-section-title" style="margin-top:24px;">Arve eelvaade</div>
                             <div class="swi-section-desc">Kontrolli mis andmed Meriti lähevad enne päris saatmist.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <input type="number" id="swi-preview-order-id" placeholder="Tellimuse ID (nt 34)" style="width:160px;margin-right:8px;">
                                 <button type="button" id="swi-preview-btn" class="button button-secondary">Näita JSON</button>
                                 <pre id="swi-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
@@ -488,7 +488,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-merit-taxes">
                             <div class="swi-section-title">Merit Aktiva – Maksude kaardistus</div>
                             <div class="swi-section-desc">Seo WooCommerce maksumäärad Merit Aktiva maksu ID-dega.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 12px;">
                                     <button type="button" id="swi-load-vatcodes-btn" class="button button-secondary">Lae Merit maksumäärad</button>
                                     <span id="swi-vatcodes-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
@@ -514,7 +514,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             $saved_dept = get_option('smart_wp_integtaion_deparment', '');
                             if ($saved_dept && !in_array($saved_dept, $depts2, true)) $depts2[] = $saved_dept;
                             ?>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php if (empty($depts2) && !$dept_api_err) : ?>
                                 <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400e;">
                                     Merit Aktivas pole ühtegi osakonda loodud. Osakondi saad luua Merit Aktiva veebikeskkonnas: <strong>Seaded → Osakonnad</strong>. Sisesta osakonna kood käsitsi allpool.
@@ -551,7 +551,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             $categories = get_terms(['taxonomy' => 'product_cat', 'hide_empty' => false]);
                             $dept_map_saved = (array) get_option('swi_category_dept_map', []);
                             ?>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 12px;font-weight:600;font-size:12.5px;">Kategooria → Osakond kaardistus</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kui toote kategooria leitakse siit tabelist, kasutatakse vastavat osakonda (eirab vaikimisi osakondi).</p>
                                 <table class="widefat" id="swi-dept-map-table">
@@ -619,14 +619,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-desc">Seadistuste eksport/import ning saatmise ajalugu.</div>
 
                             <?php // Feature 5: Eksport ?>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Seadistuste eksport</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Lae alla kõik seadistused JSON failina.</p>
                                 <button type="button" id="swi-export-btn" class="button button-secondary">Ekspordi seaded</button>
                             </div>
 
                             <?php // Feature 5: Import ?>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Seadistuste import</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Lae üles eelnevalt eksporditud JSON fail.</p>
                                 <input type="file" id="swi-import-file" accept=".json" style="margin-right:8px;">
@@ -637,7 +637,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php // Feature 7: Saatmise ajalugu ?>
                             <div class="swi-section-title" style="margin-top:24px;">Saatmise ajalugu</div>
                             <div class="swi-section-desc">Viimased 50 saatmiskatset.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php if (empty($history)) : ?>
                                 <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
                                 <?php else : ?>
@@ -744,12 +744,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
+                            <div class="swi-card" style="margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Simplebooks – Üldseaded</div>
                             <div class="swi-section-desc">Simplebooks API võti seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Simplebooks</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php $this->render_toggle('swi_simplebooks_enable', 'Luba Simplebooks', $sb_on); ?>
                                 <?php woocommerce_admin_fields($sb_s); ?>
                             </div>
@@ -761,7 +761,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sb-history">
                             <div class="swi-section-title">Simplebooks – Saatmise ajalugu</div>
                             <div class="swi-section-desc">Viimased 50 Simplebooks saatmiskatset.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php if (empty($sb_history)) : ?>
                                 <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
                                 <?php else : ?>
@@ -806,7 +806,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sb-sync">
                             <div class="swi-section-title">Simplebooks – Sünkroniseerimise kontroll</div>
                             <div class="swi-section-desc">Võrdle WooCommerce tellimusi Simplebooks arvetega. Puuduvaid arveid saad siit uuesti saata.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <button type="button" id="swi-sb-sync-btn" class="button button-secondary">Kontrolli sünkroniseerimist</button>
                                 <span id="swi-sb-sync-spinner" style="display:none;margin-left:10px;">Laen...</span>
                                 <div id="swi-sb-sync-result" style="margin-top:16px;"></div>
@@ -818,7 +818,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-title">Simplebooks – Tööriistad</div>
                             <div class="swi-section-desc">Hulga saatmine, käsitsi saatmine, arve eelvaade.</div>
 
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Sünkroniseeri kõik</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada kõik saadetamata tellimused korraga Simplebooks'i (max 50 korraga).</p>
                                 <button type="button" id="swi-sb-bulk-btn" class="button button-primary">Sünkroniseeri kõik puuduvad</button>
@@ -826,7 +826,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <div id="swi-sb-bulk-result" style="margin-top:12px;font-size:12.5px;"></div>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada tellimus Simplebooks'i, olenemata kas see on juba saadetud.</p>
                                 <input type="number" id="swi-sb-manual-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
@@ -834,7 +834,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <span id="swi-sb-manual-result" style="margin-left:10px;font-size:12px;"></span>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Arve eelvaade</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kuva mis andmed Simplebooks'i lähevad enne päris saatmist.</p>
                                 <input type="number" id="swi-sb-preview-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
@@ -875,12 +875,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele. Kopeeri võtmed Laravel rakenduse litsentsi lehelt.</div>
-                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
+                            <div class="swi-card" style="margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Smart Accounts – Üldseaded</div>
                             <div class="swi-section-desc">Smart Accounts API võtmed seadista Laravel rakenduses jaotises <em>Litsentsid → Seadista → Smart Accounts</em>. Plugin edastab tellimused automaatselt vaheserveri kaudu.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php $this->render_toggle('swi_smartaccounts_enable', 'Luba Smart Accounts', $sa_on); ?>
                                 <?php woocommerce_admin_fields($sa_s); ?>
                             </div>
@@ -893,7 +893,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sa-history">
                             <div class="swi-section-title">Saatmise ajalugu</div>
                             <div class="swi-section-desc">Viimased 50 Smart Accounts saatmiskatset (uusim üleval).</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php
                                 $sa_hist = get_option('swi_sa_send_history', []);
                                 if (empty($sa_hist)) : ?>
@@ -971,7 +971,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sa-sync">
                             <div class="swi-section-title">Sünkroniseerimise kontroll</div>
                             <div class="swi-section-desc">Näitab milliseid tellimusi pole veel Smart Accountsi saadetud (plugina andmete põhjal).</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <button type="button" class="button button-primary" id="swi-sa-sync-btn">
                                     Kontrolli sünkroniseerimist
                                 </button>
@@ -1075,7 +1075,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sa-tools">
                             <div class="swi-section-title">Tööriistad</div>
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <h3 style="margin:0 0 8px;font-size:14px;">Tühista saatmise märgid</h3>
                                 <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Eemaldab kõik "_swi_sent_smartaccounts" märgid — kasulik kui SA-st kustutati arved ja soovid uuesti saata.</p>
                                 <button type="button" class="button" id="swi-sa-reset-btn" onclick="if(!confirm('Kustutad kõik saatmise märgid. Jätka?')) return; this.disabled=true; jQuery.post(ajaxurl, {action:'swi_sa_reset_sent', security:document.getElementById('swi_sa_nonce').value}, function(r){ document.getElementById('swi-sa-reset-btn').disabled=false; document.getElementById('swi-sa-reset-result').innerHTML = r.success ? '<span style=color:#16a34a>✓ '+r.data.message+'</span>' : '<span style=color:#dc2626>✗ Viga</span>'; });">
@@ -1084,7 +1084,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <span id="swi-sa-reset-result" style="margin-left:10px;font-size:13px;"></span>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <h3 style="margin:0 0 8px;font-size:14px;">Sünkroniseeri kõik puuduvad</h3>
                                 <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Saadab kõik saadetamata tellimused Smart Accountsi (max 50 korraga).</p>
                                 <button type="button" class="button button-primary" id="swi-sa-bulk-btn">
@@ -1094,7 +1094,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <div id="swi-sa-bulk-result" style="margin-top:12px;font-size:13px;"></div>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <h3 style="margin:0 0 8px;font-size:14px;">Käsitsi saatmine</h3>
                                 <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Saada üks konkreetne tellimus tellimuse ID järgi.</p>
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1194,17 +1194,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php endif; ?>
                             <div class="swi-section-title">Vaheserveri ühendus</div>
                             <div class="swi-section-desc">Kehtib kõigile süsteemidele.</div>
-                            <div class="swi-card" style="max-width:860px; margin-bottom:28px;">
+                            <div class="swi-card" style="margin-bottom:28px;">
                                 <?php woocommerce_admin_fields( $conn_s ); ?>
                             </div>
                             <div class="swi-section-title">Erply – Üldseaded</div>
                             <div class="swi-section-desc">Erply API URL, kasutajanimi ja parool seadistatakse Laravel rakenduses jaotises <em>Litsentsid → Seadista → Erply</em>.</div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <?php $this->render_toggle('swi_erply_enable', 'Luba Erply', $erply_on); ?>
                                 <?php woocommerce_admin_fields($erply_s); ?>
                             </div>
                             <div class="swi-alert info">ℹ <div>Erply API seaded (URL, kasutajanimi, parool) konfigureeritakse Laravel vaheserveri litsentsi seadetes.</div></div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Ühenduse test</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kontrollib ühendust Erply API-ga — autentib ja tagastab tulemuse.</p>
                                 <input type="hidden" id="swi_erply_gen_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
@@ -1238,7 +1238,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-erply-history">
                             <div class="swi-section-title">Erply – Saatmise ajalugu</div>
                             <div class="swi-section-desc">Viimased 50 Erply saatmiskatset (uusim üleval).</div>
-                            <div class="swi-card" style="max-width:900px;">
+                            <div class="swi-card">
                                 <?php if (empty($erply_hist)) : ?>
                                 <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
                                 <?php else : ?>
@@ -1294,7 +1294,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-erply-sync">
                             <div class="swi-section-title">Sünkroniseerimise kontroll</div>
                             <div class="swi-section-desc">Kontrolli millised tellimused on Erplysse saadetud.</div>
-                            <div class="swi-card" style="max-width:900px;">
+                            <div class="swi-card">
                                 <input type="hidden" id="swi_erply_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button class="button button-secondary" id="swi-erply-sync-btn">🔄 Kontrolli</button>
@@ -1392,7 +1392,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-title">Tööriistad</div>
                             <input type="hidden" id="swi_erply_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada konkreetne tellimus Erplysse (ka juba saadetud).</p>
                                 <input type="number" id="swi-erply-manual-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
@@ -1400,7 +1400,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <span id="swi-erply-manual-result" style="margin-left:10px;font-size:12.5px;"></span>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Arve JSON eelvaade</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kuva mis andmed Erplysse läheksid enne päris saatmist.</p>
                                 <input type="number" id="swi-erply-preview-id" placeholder="Tellimuse ID (nt 42)" style="width:180px;margin-right:8px;">
@@ -1408,7 +1408,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 <pre id="swi-erply-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
                             </div>
 
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühista kõik saatmise märgid</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Eemaldab kõik "_swi_sent_erply" märgid — kasulik kui Erplyst kustutati arved ja soovid uuesti saata.</p>
                                 <button class="button" id="swi-erply-reset-btn" style="color:#dc2626;border-color:#dc2626;">⚠ Tühista saatmise märgid</button>
@@ -1486,12 +1486,12 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- ÜLDSEADED -->
                         <div class="swi-panel active" id="swi-panel-stdb-general">
                             <div class="swi-section-title">Standard Books – Üldseaded</div>
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <input type="hidden" id="swi_stdb_tools_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
                                 <?php $this->render_toggle('swi_stdb_enable', 'Luba Standard Books', $stdb_on); ?>
                                 <?php woocommerce_admin_fields( $stdb_s ); ?>
                             </div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">🔌 Ühenduse test</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kontrollib kas Standard Books API on kättesaadav ja autentimine töötab.</p>
                                 <button type="button" id="swi-stdb-test-btn" class="button button-secondary">🔌 Testi ühendust</button>
@@ -1522,7 +1522,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-stdb-history">
                             <div class="swi-section-title">Standard Books – Saatmise ajalugu</div>
                             <div class="swi-section-desc">Viimased 50 Standard Books saatmiskatset (uusim üleval).</div>
-                            <div class="swi-card" style="max-width:900px;">
+                            <div class="swi-card">
                                 <?php if (empty($stdb_hist)) : ?>
                                 <p style="color:#9ca3af;font-size:12.5px;margin:0;">Saatmisi pole veel toimunud.</p>
                                 <?php else : ?>
@@ -1564,7 +1564,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-stdb-sync">
                             <div class="swi-section-title">Sünkroniseerimise kontroll</div>
                             <div class="swi-section-desc">Kontrolli millised tellimused on Standard Booksi saadetud.</div>
-                            <div class="swi-card" style="max-width:900px;">
+                            <div class="swi-card">
                                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button class="button button-secondary" id="swi-stdb-sync-btn">🔄 Kontrolli</button>
                                     <button class="button button-primary" id="swi-stdb-syncall-btn">⬆ Sync kõik</button>
@@ -1652,21 +1652,21 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <!-- TÖÖRIISTAD -->
                         <div class="swi-panel" id="swi-panel-stdb-tools">
                             <div class="swi-section-title">Standard Books – Tööriistad</div>
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Käsitsi saatmine</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Saada üksik tellimus Standard Booksi.</p>
                                 <input type="number" id="swi-stdb-manual-id" placeholder="Tellimuse ID" style="width:140px;margin-right:8px;" class="regular-text">
                                 <button class="button" id="swi-stdb-manual-btn">Saada SB-sse</button>
                                 <span id="swi-stdb-manual-result" style="margin-left:10px;font-size:13px;"></span>
                             </div>
-                            <div class="swi-card" style="max-width:860px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">JSON eelvaade</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Näita mis payload saadetaks ilma päriselt saatmata.</p>
                                 <input type="number" id="swi-stdb-preview-id" placeholder="Tellimuse ID" style="width:140px;margin-right:8px;" class="regular-text">
                                 <button type="button" id="swi-stdb-preview-btn" class="button button-secondary">Näita JSON</button>
                                 <pre id="swi-stdb-preview-result" style="display:none;margin-top:12px;background:#f3f4f6;padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:400px;"></pre>
                             </div>
-                            <div class="swi-card" style="max-width:860px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühista kõik saatmise märgid</p>
                                 <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Eemaldab kõik "_swi_sent_stdb" märgid — kasulik kui Standard Booksist kustutati arved ja soovid uuesti saata.</p>
                                 <button class="button" id="swi-stdb-reset-btn" style="color:#dc2626;border-color:#dc2626;">⚠ Tühista saatmise märgid</button>
@@ -1738,7 +1738,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 Lisab kassasse registrikoodi välja. Kui ostja sisestab registrikoodi, täidetakse automaatselt ettevõtte nimi, KMKR nr ja aadress Eesti äriregistrist.
                             </div>
                             <input type="hidden" id="swi_rik_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
-                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <?php $this->render_toggle('swi_rik_enable', 'Luba Äriregistri moodul', $rik_on); ?>
                                 <table class="form-table" style="margin-top:16px;">
                                     <tr>
@@ -1810,7 +1810,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-rik-fields">
                             <div class="swi-section-title">Äriregistri moodul – Kassaväljad</div>
                             <div class="swi-section-desc">Seadista kuidas registrikoodi ja KMKR väljad kassas käituvad.</div>
-                            <div class="swi-card" style="max-width:680px;">
+                            <div class="swi-card">
                                 <table class="form-table">
                                     <tr>
                                         <th style="width:200px;"><label for="swi_rik_reg_label">Registrikoodi välja silt</label></th>
@@ -1886,7 +1886,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             $wc_statuses  = wc_get_order_statuses();
                             ?>
                             <!-- Üldseaded -->
-                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <?php $this->render_toggle('swi_smartpost_enable', 'Luba Smartpost pakiautomaadid', $smartpost_on); ?>
                                 <table class="form-table" style="margin-top:16px;">
                                     <tr>
@@ -1905,7 +1905,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
 
                             <!-- Saatja info -->
-                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Saatja andmed</p>
                                 <table class="form-table">
                                     <tr>
@@ -1924,7 +1924,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
 
                             <!-- Pakisildi seaded -->
-                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
                                 <table class="form-table">
                                     <tr>
@@ -1968,7 +1968,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             </div>
 
                             <!-- Lubatud riigid + hinnad -->
-                            <div class="swi-card" style="max-width:780px;margin-bottom:20px;">
+                            <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Lubatud riigid ja hinnad</p>
                                 <p style="margin:0 0 16px;font-size:12.5px;color:#6b7280;">Märgi riik aktiivseks ja sisesta hinnad (€, km-ta). Tasuta alates: ostukorvi summa millest alates saatmine on tasuta.</p>
                                 <table style="border-collapse:collapse;width:100%;font-size:13px;">
@@ -2013,7 +2013,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         <div class="swi-panel" id="swi-panel-sp-tools">
                             <div class="swi-section-title">Smartpost – Tööriistad</div>
                             <div class="swi-section-desc">Pakiautomaatide nimekiri laetakse Itella serverist ja salvestatakse 12 tunniks vahemällu.</div>
-                            <div class="swi-card" style="max-width:680px;">
+                            <div class="swi-card">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühjenda pakiautomaatide cache</p>
                                 <button type="button" id="swi-sp-flush-btn" class="button button-secondary">🔄 Tühjenda cache</button>
                                 <span id="swi-sp-flush-result" style="margin-left:10px;font-size:13px;"></span>
