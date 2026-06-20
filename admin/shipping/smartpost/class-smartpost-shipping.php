@@ -23,7 +23,7 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         add_action( 'woocommerce_after_shipping_rate',        [ $this, 'render_parcel_select' ], 10, 2 );
         add_action( 'woocommerce_checkout_process',           [ $this, 'validate_parcel_selection' ] );
         add_action( 'woocommerce_checkout_update_order_meta', [ $this, 'save_parcel_selection' ] );
-        add_action( 'wp_enqueue_scripts',                     [ $this, 'enqueue_scripts' ] );
+        add_action( 'wp_footer',                              [ $this, 'enqueue_scripts' ] );
     }
 
     public function calculate_shipping( $package = [] ): void {
