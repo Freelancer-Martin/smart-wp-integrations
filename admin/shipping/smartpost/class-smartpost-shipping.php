@@ -24,7 +24,8 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         add_action( 'woocommerce_checkout_process',           [ $this, 'validate_parcel_selection' ] );
         add_action( 'woocommerce_checkout_update_order_meta', [ $this, 'save_parcel_selection' ] );
         add_action( 'wp_footer',                              [ $this, 'enqueue_scripts' ] );
-        // Block checkout salvestamine
+        add_action( 'wp_ajax_swi_sp_set_pup',                [ $this, 'ajax_set_pup' ] );
+        add_action( 'wp_ajax_nopriv_swi_sp_set_pup',         [ $this, 'ajax_set_pup' ] );
         add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ $this, 'save_block_parcel_selection' ], 10, 2 );
     }
 
@@ -115,10 +116,19 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         }
     }
 
+    public function ajax_set_pup(): void {
+        $pup  = sanitize_text_field( wp_unslash( $_POST['pup_code']       ?? '' ) );
+        $name = sanitize_text_field( wp_unslash( $_POST['location_name']  ?? '' ) );
+        if ( WC()->session ) {
+            WC()->session->set( 'swi_smartpost_pup_code',      $pup );
+            WC()->session->set( 'swi_smartpost_location_name', $name );
+        }
+        wp_send_json_success();
+    }
+
     public function save_block_parcel_selection( \WC_Order $order, \WP_REST_Request $request ): void {
-        $extensions = $request->get_param( 'extensions' );
-        $pup  = sanitize_text_field( $extensions['swi_smartpost']['pup_code']      ?? '' );
-        $name = sanitize_text_field( $extensions['swi_smartpost']['location_name'] ?? '' );
+        $pup  = WC()->session ? sanitize_text_field( WC()->session->get( 'swi_smartpost_pup_code', '' ) ) : '';
+        $name = WC()->session ? sanitize_text_field( WC()->session->get( 'swi_smartpost_location_name', '' ) ) : '';
         if ( $pup ) {
             $order->update_meta_data( '_swi_smartpost_pup_code',      $pup );
             $order->update_meta_data( '_swi_smartpost_location_name', $name );
@@ -196,16 +206,13 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
 
                     sel.addEventListener('change', function(){
                         var code = sel.value;
-                        var name = sel.options[sel.selectedIndex]?.text || '';
-                        // Salvesta WC blocks store kaudu
-                        if (window.wp && window.wp.data) {
-                            try {
-                                window.wp.data.dispatch('wc/store/checkout').__internalSetExtensionData('swi_smartpost', { pup_code: code, location_name: name }, true);
-                            } catch(e) {
-                                // Vanem WC API
-                                try { window.wp.data.dispatch('wc/store/checkout').setExtensionData('swi_smartpost', { pup_code: code, location_name: name }); } catch(e2){}
-                            }
-                        }
+                        var name = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+                        // Salvesta WC sessiooni AJAX kaudu
+                        var fd = new FormData();
+                        fd.append('action', 'swi_sp_set_pup');
+                        fd.append('pup_code', code);
+                        fd.append('location_name', name);
+                        fetch(typeof swi_ajax !== 'undefined' ? swi_ajax.url : '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>', { method: 'POST', body: fd, credentials: 'same-origin' });
                     });
 
                     wrap.appendChild(label);
@@ -213,42 +220,31 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
                     return wrap;
                 }
 
-                function tryInject() {
-                    if (injected) {
-                        // Uuenda nähtavust
-                        var wrap = document.getElementById('swi-sp-block-wrap');
-                        var isSmartpost = isSmartpostSelected();
-                        if (wrap) wrap.style.display = isSmartpost ? 'block' : 'none';
-                        return;
-                    }
-
-                    // Leia Smartpost saatmisviisi label
-                    var labels = document.querySelectorAll('.wc-block-components-radio-control__option-layout, .wc-block-components-shipping-rates-control__package .wc-block-components-radio-control__label');
-                    var targetEl = null;
-                    labels.forEach(function(el){
-                        if (el.textContent && el.textContent.toLowerCase().indexOf('smartpost') !== -1) {
-                            targetEl = el.closest('.wc-block-components-radio-control__option') || el.parentElement;
-                        }
-                    });
-
-                    if (!targetEl) return;
-
-                    var sel = buildSelect();
-                    sel.style.display = isSmartpostSelected() ? 'block' : 'none';
-                    targetEl.appendChild(sel);
-                    injected = true;
+                function getSmartpostInput() {
+                    return document.querySelector('input[type="radio"][value*="swi_smartpost"]');
                 }
 
                 function isSmartpostSelected() {
-                    var inputs = document.querySelectorAll('input[type="radio"][id*="shipping"]');
-                    var found = false;
-                    inputs.forEach(function(inp){
-                        if (inp.checked && inp.value && inp.value.indexOf('swi_smartpost') !== -1) found = true;
-                        // WC blocks kasutab label tekstist
-                        var label = document.querySelector('label[for="' + inp.id + '"]');
-                        if (inp.checked && label && label.textContent.toLowerCase().indexOf('smartpost') !== -1) found = true;
-                    });
-                    return found;
+                    var inp = getSmartpostInput();
+                    return inp && inp.checked;
+                }
+
+                function tryInject() {
+                    var inp = getSmartpostInput();
+                    if (!inp) return; // saatmisviis pole veel renderdatud
+
+                    var wrap = document.getElementById('swi-sp-block-wrap');
+
+                    if (!injected) {
+                        // Leia <li> element mis sisaldab Smartpost radiobuttonit
+                        var listItem = inp.closest('li') || inp.closest('.wc-block-components-radio-control__option') || inp.parentElement;
+                        var select = buildSelect();
+                        listItem.appendChild(select);
+                        injected = true;
+                        wrap = document.getElementById('swi-sp-block-wrap');
+                    }
+
+                    if (wrap) wrap.style.display = isSmartpostSelected() ? 'block' : 'none';
                 }
 
                 // MutationObserver — vaata DOM muutusi
