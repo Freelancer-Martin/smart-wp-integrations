@@ -1878,6 +1878,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-title">Smartpost – Üldseaded</div>
                             <div class="swi-section-desc">Itella Smartpost pakiautomaadid WooCommerce kassas.</div>
                             <input type="hidden" id="swi_sp_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
+                            <?php
+                            $sp_countries = (array) get_option('swi_smartpost_countries', ['EE']);
+                            $sp_prices    = json_decode( get_option('swi_smartpost_prices', '{}'), true ) ?: [];
+                            $sp_cc_list   = ['EE' => 'Eesti', 'FI' => 'Soome', 'LV' => 'Läti', 'LT' => 'Leedu', 'SE' => 'Rootsi'];
+                            $sp_sizes     = ['xs' => 'XS', 's' => 'S', 'm' => 'M', 'l' => 'L', 'xl' => 'XL'];
+                            $wc_statuses  = wc_get_order_statuses();
+                            ?>
+                            <!-- Üldseaded -->
                             <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
                                 <?php $this->render_toggle('swi_smartpost_enable', 'Luba Smartpost pakiautomaadid', $smartpost_on); ?>
                                 <table class="form-table" style="margin-top:16px;">
@@ -1893,24 +1901,112 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         <th><label for="swi_smartpost_title">Kuvatav nimi kassas</label></th>
                                         <td><input type="text" id="swi_smartpost_title" name="swi_smartpost_title" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_title', 'Smartpost pakiautomaat') ); ?>"></td>
                                     </tr>
+                                </table>
+                            </div>
+
+                            <!-- Saatja info -->
+                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Saatja andmed</p>
+                                <table class="form-table">
                                     <tr>
-                                        <th><label for="swi_smartpost_cost">Tarnetasu (€)</label></th>
-                                        <td><input type="text" id="swi_smartpost_cost" name="swi_smartpost_cost" style="width:100px;" value="<?php echo esc_attr( get_option('swi_smartpost_cost', '3.99') ); ?>"></td>
+                                        <th style="width:200px;"><label for="swi_smartpost_sender_name">Saatja nimi</label></th>
+                                        <td><input type="text" id="swi_smartpost_sender_name" name="swi_smartpost_sender_name" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_sender_name', '') ); ?>"></td>
                                     </tr>
                                     <tr>
-                                        <th><label for="swi_smartpost_free_min">Tasuta saatmise lävi (€)</label></th>
-                                        <td><input type="text" id="swi_smartpost_free_min" name="swi_smartpost_free_min" style="width:100px;" value="<?php echo esc_attr( get_option('swi_smartpost_free_min', '') ); ?>" placeholder="Jäta tühjaks"></td>
+                                        <th><label for="swi_smartpost_sender_phone">Saatja telefon</label></th>
+                                        <td><input type="text" id="swi_smartpost_sender_phone" name="swi_smartpost_sender_phone" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_sender_phone', '') ); ?>"></td>
                                     </tr>
                                     <tr>
-                                        <th>Riigid</th>
-                                        <td>
-                                            <?php $sp_countries = (array) get_option('swi_smartpost_countries', ['EE']); ?>
-                                            <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="EE" <?php checked( in_array('EE', $sp_countries, true) ); ?>> Eesti</label>
-                                            <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="LV" <?php checked( in_array('LV', $sp_countries, true) ); ?>> Läti</label>
-                                            <label><input type="checkbox" name="swi_smartpost_countries[]" value="LT" <?php checked( in_array('LT', $sp_countries, true) ); ?>> Leedu</label>
-                                        </td>
+                                        <th><label for="swi_smartpost_sender_email">Saatja email</label></th>
+                                        <td><input type="email" id="swi_smartpost_sender_email" name="swi_smartpost_sender_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_sender_email', '') ); ?>"></td>
                                     </tr>
                                 </table>
+                            </div>
+
+                            <!-- Pakisildi seaded -->
+                            <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
+                                <table class="form-table">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_smartpost_label_size">Pakisildi mõõt</label></th>
+                                        <td>
+                                            <select id="swi_smartpost_label_size" name="swi_smartpost_label_size">
+                                                <?php foreach (['A4' => 'A4', 'A5' => 'A5', 'A6' => 'A6', 'THERMAL' => 'Thermal (102×210)'] as $v => $l) : ?>
+                                                <option value="<?php echo $v; ?>" <?php selected( get_option('swi_smartpost_label_size', 'A4'), $v ); ?>><?php echo $l; ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><?php $this->render_toggle('swi_smartpost_auto_send', '', get_option('swi_smartpost_auto_send') === 'yes', true); ?></th>
+                                        <td style="vertical-align:middle;padding-top:14px;">Paki andmed saadetakse automaatselt</td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_status_after_label">Olek peale printimist</label></th>
+                                        <td>
+                                            <select id="swi_smartpost_status_after_label" name="swi_smartpost_status_after_label">
+                                                <option value="">— Ära muuda —</option>
+                                                <?php foreach ( $wc_statuses as $slug => $label ) : ?>
+                                                <option value="<?php echo esc_attr($slug); ?>" <?php selected( get_option('swi_smartpost_status_after_label', ''), $slug ); ?>><?php echo esc_html($label); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><?php $this->render_toggle('swi_smartpost_add_tracking', '', get_option('swi_smartpost_add_tracking') === 'yes', true); ?></th>
+                                        <td style="vertical-align:middle;padding-top:14px;">Lisa paki jälgimiskood täidetud tellimuse e-mailile</td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_smartpost_label_email">Pakisildi koopia e-mail</label></th>
+                                        <td><input type="email" id="swi_smartpost_label_email" name="swi_smartpost_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_label_email', '') ); ?>" placeholder="Jäta tühjaks kui pole vaja"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?php $this->render_toggle('swi_smartpost_mobile_classic', '', get_option('swi_smartpost_mobile_classic') === 'yes', true); ?></th>
+                                        <td style="vertical-align:middle;padding-top:14px;">Kuva telefonis klassikalist pakiautomaadi valikut</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Lubatud riigid + hinnad -->
+                            <div class="swi-card" style="max-width:780px;margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Lubatud riigid ja hinnad</p>
+                                <p style="margin:0 0 16px;font-size:12.5px;color:#6b7280;">Märgi riik aktiivseks ja sisesta hinnad (€, km-ta). Tasuta alates: ostukorvi summa millest alates saatmine on tasuta.</p>
+                                <table style="border-collapse:collapse;width:100%;font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#f9f9f9;">
+                                            <th style="padding:8px 10px;text-align:left;border:1px solid #e5e7eb;width:100px;">Riik</th>
+                                            <?php foreach ($sp_sizes as $sk => $sl) : ?>
+                                            <th style="padding:8px 10px;text-align:center;border:1px solid #e5e7eb;"><?php echo $sl; ?></th>
+                                            <?php endforeach; ?>
+                                            <th style="padding:8px 10px;text-align:center;border:1px solid #e5e7eb;">Tasuta alates</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($sp_cc_list as $cc => $ccname) :
+                                        $active = in_array($cc, $sp_countries, true);
+                                        $prices = $sp_prices[$cc] ?? [];
+                                    ?>
+                                        <tr>
+                                            <td style="padding:8px 10px;border:1px solid #e5e7eb;">
+                                                <label><input type="checkbox" name="swi_smartpost_countries[]" value="<?php echo $cc; ?>" <?php checked($active); ?>> <?php echo $ccname; ?></label>
+                                            </td>
+                                            <?php foreach ($sp_sizes as $sk => $sl) : ?>
+                                            <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">
+                                                <input type="text" name="swi_sp_price[<?php echo $cc; ?>][<?php echo $sk; ?>]"
+                                                       value="<?php echo esc_attr( $prices[$sk] ?? '' ); ?>"
+                                                       style="width:64px;text-align:center;" placeholder="—">
+                                            </td>
+                                            <?php endforeach; ?>
+                                            <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">
+                                                <input type="text" name="swi_sp_price[<?php echo $cc; ?>][free]"
+                                                       value="<?php echo esc_attr( $prices['free'] ?? '' ); ?>"
+                                                       style="width:64px;text-align:center;" placeholder="—">
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <p style="margin:10px 0 0;font-size:12px;color:#9ca3af;">XS ≤ 2 kg &nbsp;|&nbsp; S ≤ 5 kg &nbsp;|&nbsp; M ≤ 10 kg &nbsp;|&nbsp; L ≤ 20 kg &nbsp;|&nbsp; XL ≤ 35 kg</p>
                             </div>
                         </div>
 
@@ -2463,17 +2559,44 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartpost_license_key',
                 'swi_smartpost_crypto_key',
                 'swi_smartpost_title',
-                'swi_smartpost_cost',
-                'swi_smartpost_free_min',
+                'swi_smartpost_sender_name',
+                'swi_smartpost_sender_phone',
+                'swi_smartpost_sender_email',
+                'swi_smartpost_label_email',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
                 }
             }
 
+            // Smartpost toggles
+            foreach ( [ 'swi_smartpost_auto_send', 'swi_smartpost_add_tracking', 'swi_smartpost_mobile_classic' ] as $tog ) {
+                update_option( $tog, isset( $_POST[ $tog ] ) && $_POST[ $tog ] === 'yes' ? 'yes' : 'no' );
+            }
+
+            // Smartpost select fields
+            foreach ( [ 'swi_smartpost_label_size', 'swi_smartpost_status_after_label' ] as $sel ) {
+                if ( isset( $_POST[ $sel ] ) ) {
+                    update_option( $sel, sanitize_text_field( wp_unslash( $_POST[ $sel ] ) ) );
+                }
+            }
+
             // Smartpost countries (checkboxes → array)
             $sp_countries = isset( $_POST['swi_smartpost_countries'] ) ? array_map( 'sanitize_text_field', (array) $_POST['swi_smartpost_countries'] ) : [];
             update_option( 'swi_smartpost_countries', $sp_countries );
+
+            // Smartpost hinnad (per country per size)
+            $sp_price_raw = $_POST['swi_sp_price'] ?? [];
+            $sp_prices    = [];
+            $sp_cc_list   = ['EE', 'FI', 'LV', 'LT', 'SE'];
+            $sp_sizes     = ['xs', 's', 'm', 'l', 'xl', 'free'];
+            foreach ( $sp_cc_list as $cc ) {
+                foreach ( $sp_sizes as $sz ) {
+                    $val = $sp_price_raw[$cc][$sz] ?? '';
+                    $sp_prices[$cc][$sz] = sanitize_text_field( $val );
+                }
+            }
+            update_option( 'swi_smartpost_prices', wp_json_encode( $sp_prices ) );
 
             // Select fields
             foreach ( [
@@ -2584,8 +2707,16 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartpost_license_key',
                 'swi_smartpost_crypto_key',
                 'swi_smartpost_title',
-                'swi_smartpost_cost',
-                'swi_smartpost_free_min',
+                'swi_smartpost_sender_name',
+                'swi_smartpost_sender_phone',
+                'swi_smartpost_sender_email',
+                'swi_smartpost_label_size',
+                'swi_smartpost_auto_send',
+                'swi_smartpost_status_after_label',
+                'swi_smartpost_add_tracking',
+                'swi_smartpost_label_email',
+                'swi_smartpost_mobile_classic',
+                'swi_smartpost_prices',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',

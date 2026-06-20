@@ -33,13 +33,31 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
         if ( get_option( 'swi_smartpost_enable' ) !== 'yes' ) return;
 
         $countries    = (array) get_option( 'swi_smartpost_countries', [ 'EE' ] );
-        $dest_country = $package['destination']['country'] ?? '';
+        $dest_country = strtoupper( $package['destination']['country'] ?? 'EE' );
         if ( $dest_country && ! in_array( $dest_country, $countries, true ) ) return;
 
-        $cost      = (float) get_option( 'swi_smartpost_cost', '3.99' );
-        $free_min  = (float) get_option( 'swi_smartpost_free_min', '' );
-        $cart_subtotal = $package['cart_subtotal'] ?? 0;
+        // Proovi per-riik hinda; langeta vana swi_smartpost_cost peale
+        $prices    = json_decode( get_option( 'swi_smartpost_prices', '{}' ), true ) ?: [];
+        $cc_prices = $prices[ $dest_country ] ?? [];
+        $weight    = (float) ( $package['contents_cost'] ?? 0 ); // kasuta kaalu kui saadaval
+        $cart_weight = WC()->cart ? (float) WC()->cart->get_cart_contents_weight() : 0;
 
+        // Määra suurus kaalu järgi
+        if ( $cart_weight <= 2 )       $sz = 'xs';
+        elseif ( $cart_weight <= 5 )   $sz = 's';
+        elseif ( $cart_weight <= 10 )  $sz = 'm';
+        elseif ( $cart_weight <= 20 )  $sz = 'l';
+        else                           $sz = 'xl';
+
+        $cost = isset( $cc_prices[ $sz ] ) && $cc_prices[ $sz ] !== ''
+            ? (float) $cc_prices[ $sz ]
+            : (float) get_option( 'swi_smartpost_cost', '3.99' );
+
+        $free_min = isset( $cc_prices['free'] ) && $cc_prices['free'] !== ''
+            ? (float) $cc_prices['free']
+            : (float) get_option( 'swi_smartpost_free_min', '' );
+
+        $cart_subtotal = $package['cart_subtotal'] ?? 0;
         if ( $free_min > 0 && $cart_subtotal >= $free_min ) {
             $cost = 0;
         }
@@ -311,8 +329,8 @@ class SWI_Smartpost_Shipping extends WC_Shipping_Method {
     }
 
     public static function flush_cache(): void {
-        delete_transient( self::CACHE_KEY . 'ee' );
-        delete_transient( self::CACHE_KEY . 'lv' );
-        delete_transient( self::CACHE_KEY . 'lt' );
+        foreach ( ['ee', 'fi', 'lv', 'lt', 'se'] as $cc ) {
+            delete_transient( self::CACHE_KEY . $cc );
+        }
     }
 }
