@@ -1925,10 +1925,13 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
                             <!-- Pakisildi seaded -->
                             <div class="swi-card" style="margin-bottom:20px;">
-                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
-                                <table class="form-table">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
+                                <?php $this->render_toggle('swi_smartpost_auto_send',     'Paki andmed saadetakse automaatselt',                      get_option('swi_smartpost_auto_send')     === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_add_tracking',  'Lisa jälgimiskood täidetud tellimuse e-mailile',            get_option('swi_smartpost_add_tracking')  === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_mobile_classic','Kuva telefonis klassikalist pakiautomaadi valikut',         get_option('swi_smartpost_mobile_classic') === 'yes'); ?>
+                                <table class="form-table" style="margin-top:8px;">
                                     <tr>
-                                        <th style="width:200px;"><label for="swi_smartpost_label_size">Pakisildi mõõt</label></th>
+                                        <th style="width:230px;"><label for="swi_smartpost_label_size">Pakisildi mõõt</label></th>
                                         <td>
                                             <select id="swi_smartpost_label_size" name="swi_smartpost_label_size">
                                                 <?php foreach (['A4' => 'A4', 'A5' => 'A5', 'A6' => 'A6', 'THERMAL' => 'Thermal (102×210)'] as $v => $l) : ?>
@@ -1936,10 +1939,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                                 <?php endforeach; ?>
                                             </select>
                                         </td>
-                                    </tr>
-                                    <tr>
-                                        <th><?php $this->render_toggle('swi_smartpost_auto_send', '', get_option('swi_smartpost_auto_send') === 'yes', true); ?></th>
-                                        <td style="vertical-align:middle;padding-top:14px;">Paki andmed saadetakse automaatselt</td>
                                     </tr>
                                     <tr>
                                         <th><label for="swi_smartpost_status_after_label">Olek peale printimist</label></th>
@@ -1953,16 +1952,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         </td>
                                     </tr>
                                     <tr>
-                                        <th><?php $this->render_toggle('swi_smartpost_add_tracking', '', get_option('swi_smartpost_add_tracking') === 'yes', true); ?></th>
-                                        <td style="vertical-align:middle;padding-top:14px;">Lisa paki jälgimiskood täidetud tellimuse e-mailile</td>
-                                    </tr>
-                                    <tr>
                                         <th><label for="swi_smartpost_label_email">Pakisildi koopia e-mail</label></th>
                                         <td><input type="email" id="swi_smartpost_label_email" name="swi_smartpost_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_label_email', '') ); ?>" placeholder="Jäta tühjaks kui pole vaja"></td>
-                                    </tr>
-                                    <tr>
-                                        <th><?php $this->render_toggle('swi_smartpost_mobile_classic', '', get_option('swi_smartpost_mobile_classic') === 'yes', true); ?></th>
-                                        <td style="vertical-align:middle;padding-top:14px;">Kuva telefonis klassikalist pakiautomaadi valikut</td>
                                     </tr>
                                 </table>
                             </div>
