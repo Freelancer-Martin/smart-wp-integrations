@@ -1926,9 +1926,10 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <!-- Pakisildi seaded -->
                             <div class="swi-card" style="margin-bottom:20px;">
                                 <p style="margin:0 0 4px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
-                                <?php $this->render_toggle('swi_smartpost_auto_send',     'Paki andmed saadetakse automaatselt',                      get_option('swi_smartpost_auto_send')     === 'yes'); ?>
-                                <?php $this->render_toggle('swi_smartpost_add_tracking',  'Lisa jälgimiskood täidetud tellimuse e-mailile',            get_option('swi_smartpost_add_tracking')  === 'yes'); ?>
-                                <?php $this->render_toggle('swi_smartpost_mobile_classic','Kuva telefonis klassikalist pakiautomaadi valikut',         get_option('swi_smartpost_mobile_classic') === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_auto_send',      'Paki andmed saadetakse automaatselt',               get_option('swi_smartpost_auto_send')      === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_add_tracking',   'Lisa jälgimiskood täidetud tellimuse e-mailile',    get_option('swi_smartpost_add_tracking')   === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_send_label_copy','Saada pakisildi koopia e-mailile',                  get_option('swi_smartpost_send_label_copy') === 'yes'); ?>
+                                <?php $this->render_toggle('swi_smartpost_mobile_classic', 'Kuva telefonis klassikalist pakiautomaadi valikut', get_option('swi_smartpost_mobile_classic')  === 'yes'); ?>
                                 <table class="form-table" style="margin-top:8px;">
                                     <tr>
                                         <th style="width:230px;"><label for="swi_smartpost_label_size">Pakisildi mõõt</label></th>
@@ -1952,8 +1953,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         </td>
                                     </tr>
                                     <tr>
-                                        <th><label for="swi_smartpost_label_email">Pakisildi koopia e-mail</label></th>
-                                        <td><input type="email" id="swi_smartpost_label_email" name="swi_smartpost_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_label_email', '') ); ?>" placeholder="Jäta tühjaks kui pole vaja"></td>
+                                        <th><label for="swi_smartpost_label_email">Koopia e-mail aadress</label></th>
+                                        <td><input type="email" id="swi_smartpost_label_email" name="swi_smartpost_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_label_email', '') ); ?>" placeholder="email@näide.ee"></td>
                                     </tr>
                                 </table>
                             </div>
@@ -2561,7 +2562,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             }
 
             // Smartpost toggles
-            foreach ( [ 'swi_smartpost_auto_send', 'swi_smartpost_add_tracking', 'swi_smartpost_mobile_classic' ] as $tog ) {
+            foreach ( [ 'swi_smartpost_auto_send', 'swi_smartpost_add_tracking', 'swi_smartpost_send_label_copy', 'swi_smartpost_mobile_classic' ] as $tog ) {
                 update_option( $tog, isset( $_POST[ $tog ] ) && $_POST[ $tog ] === 'yes' ? 'yes' : 'no' );
             }
 
@@ -2705,6 +2706,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartpost_auto_send',
                 'swi_smartpost_status_after_label',
                 'swi_smartpost_add_tracking',
+                'swi_smartpost_send_label_copy',
                 'swi_smartpost_label_email',
                 'swi_smartpost_mobile_classic',
                 'swi_smartpost_prices',
