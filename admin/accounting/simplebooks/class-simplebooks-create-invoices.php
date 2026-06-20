@@ -63,6 +63,53 @@ class SWI_Simplebooks_Create_Invoices {
 
         // Admin notice kinni jäänud orderite kohta
         add_action( 'admin_notices', [ $this, 'show_stuck_notice' ] );
+
+        // Cron: registreeri 10-minutiline intervall ja ajakava
+        add_filter( 'cron_schedules', [ $this, 'add_cron_interval' ] );
+        add_action( 'swi_sb_cron_send', [ $this, 'cron_send_orders' ] );
+        if ( ! wp_next_scheduled( 'swi_sb_cron_send' ) ) {
+            wp_schedule_event( time(), 'swi_10min', 'swi_sb_cron_send' );
+        }
+    }
+
+    public function add_cron_interval( array $schedules ): array {
+        if ( ! isset( $schedules['swi_10min'] ) ) {
+            $schedules['swi_10min'] = [ 'interval' => 600, 'display' => 'Iga 10 minuti järel' ];
+        }
+        return $schedules;
+    }
+
+    public function cron_send_orders(): void {
+        if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) return;
+
+        $status = get_option( 'swi_simplebooks_order_status', 'wc-completed' );
+        $orders = wc_get_orders( [ 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+
+        foreach ( $orders as $order ) {
+            if ( $order->get_meta( '_swi_sent_simplebooks' ) ) continue;
+
+            $payload = $this->build_payload( $order );
+            if ( ! $payload ) continue;
+
+            $res = LocalApiClient::sendEncryptedOrder( $payload, 'simplebooks' );
+            if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+                $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+                $order->delete_meta_data( '_swi_simplebooks_retry' );
+                $order->delete_meta_data( '_swi_simplebooks_retry_count' );
+                $order->save();
+                $order->add_order_note( 'Simplebooks: arve edastatud cron-iga.' );
+                swi_sb_log_send_history( $order->get_id(), 'ok', 'Cron: ' . ( $payload['number'] ?? '' ) );
+            } else {
+                $msg   = $this->humanize_error( $res );
+                $count = (int) $order->get_meta( '_swi_simplebooks_retry_count' ) + 1;
+                $order->update_meta_data( '_swi_simplebooks_retry', '1' );
+                $order->update_meta_data( '_swi_simplebooks_retry_count', $count );
+                $order->save();
+                swi_sb_log_send_history( $order->get_id(), 'error', 'Cron ebaõnnestus (katse ' . $count . '): ' . $msg );
+            }
+
+            usleep( 300000 );
+        }
     }
 
     /* ─── WC orders kolumn ─── */

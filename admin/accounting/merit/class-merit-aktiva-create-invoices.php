@@ -86,6 +86,13 @@ class My_Simple_Ajax_Plugin {
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
 
+        // Cron: registreeri 10-minutiline intervall ja ajakava
+        add_filter( 'cron_schedules', [ $this, 'add_cron_interval' ] );
+        add_action( 'swi_merit_cron_send', [ $this, 'cron_send_orders' ] );
+        if ( ! wp_next_scheduled( 'swi_merit_cron_send' ) ) {
+            wp_schedule_event( time(), 'swi_10min', 'swi_merit_cron_send' );
+        }
+
         // Kõik seaded loetakse üks kord konstruktoris, mitte iga meetodi kutsumise ajal
         $this->tax_field        = get_option( 'smart_wp_integtaion_maksumaar' );
         $this->payment_deadline = get_option( 'smart_wp_integtaion_maksetahtaeg' );
@@ -103,6 +110,45 @@ class My_Simple_Ajax_Plugin {
      * wp_localize_script on WordPressi õige tee PHP muutujate JS-sse edastamiseks —
      * alternatiiv inline-skriptile, aga turvalisem ja cacheable.
      */
+    public function add_cron_interval( array $schedules ): array {
+        if ( ! isset( $schedules['swi_10min'] ) ) {
+            $schedules['swi_10min'] = [ 'interval' => 600, 'display' => 'Iga 10 minuti järel' ];
+        }
+        return $schedules;
+    }
+
+    public function cron_send_orders(): void {
+        if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) return;
+
+        $status = get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' );
+        $orders = wc_get_orders( [ 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+
+        foreach ( $orders as $order ) {
+            if ( $order->get_meta( '_swi_sent_merit' ) ) continue;
+
+            $payload = $this->build_payload_for_order( $order );
+            if ( ! $payload ) continue;
+
+            $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
+            if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
+                $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+                $order->delete_meta_data( '_swi_merit_retry' );
+                $order->delete_meta_data( '_swi_merit_retry_count' );
+                $order->save();
+                $order->add_order_note( 'Merit Aktiva: arve edastatud cron-iga (' . $res['status'] . ').' );
+                swi_log_send_history( $order->get_id(), 'ok', 'Cron: ' . ( $res['message'] ?? $res['status'] ) );
+            } else {
+                $count = (int) $order->get_meta( '_swi_merit_retry_count' ) + 1;
+                $order->update_meta_data( '_swi_merit_retry', '1' );
+                $order->update_meta_data( '_swi_merit_retry_count', $count );
+                $order->save();
+                swi_log_send_history( $order->get_id(), 'error', 'Cron ebaõnnestus (katse ' . $count . '): ' . ( $res['message'] ?? 'Tundmatu viga' ) );
+            }
+
+            usleep( 300000 );
+        }
+    }
+
     public function enqueue_scripts() {
         wp_enqueue_script( 'my-simple-ajax', plugin_dir_url( __FILE__ ) . '../../js/smart-wp-integrations-admin.js', [ 'jquery' ], '1.0', true );
         wp_localize_script( 'my-simple-ajax', 'MyAjax', [
