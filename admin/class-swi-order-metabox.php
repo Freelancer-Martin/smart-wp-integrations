@@ -100,6 +100,20 @@ class SWI_Order_Metabox {
                 </button>
             </div>
 
+            <?php
+            $sa_sent = $order->get_meta( '_swi_sent_smartaccounts' );
+            if ( $sa_sent && isset( $this->services['smartaccounts'] ) ) :
+                $pdf_nonce = wp_create_nonce( 'my_nonce' );
+            ?>
+            <button id="swi-mb-pdf-btn"
+                    class="button"
+                    style="margin-top:6px;width:100%;height:28px;font-size:12px;"
+                    data-id="<?php echo esc_attr( $order_id ); ?>"
+                    data-nonce="<?php echo esc_attr( $pdf_nonce ); ?>">
+                Laadi SA arve PDF
+            </button>
+            <?php endif; ?>
+
             <div id="swi-mb-msg" style="margin-top:6px;font-size:12px;min-height:16px;"></div>
         </div>
         <?php
@@ -153,6 +167,38 @@ class SWI_Order_Metabox {
                 }).fail(function(xhr){
                     btn.prop('disabled', false).text('Saada');
                     msg.css('color','#dc2626').text('✗ HTTP ' + xhr.status + ': ' + (xhr.responseText || 'Ühenduse viga').substring(0,120));
+                });
+            });
+
+            $('#swi-mb-pdf-btn').on('click', function(){
+                var btn  = $(this);
+                var msg  = $('#swi-mb-msg');
+                btn.prop('disabled', true).text('Laen PDF…');
+                msg.css('color','#6b7280').text('');
+                $.post(ajaxurl, {
+                    action:   'swi_sa_get_pdf',
+                    security: btn.data('nonce'),
+                    order_id: btn.data('id')
+                }, function(r){
+                    btn.prop('disabled', false).text('Laadi SA arve PDF');
+                    if (r.success && r.data.pdf_base64) {
+                        var byteStr = atob(r.data.pdf_base64);
+                        var arr = new Uint8Array(byteStr.length);
+                        for (var i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+                        var blob = new Blob([arr], {type:'application/pdf'});
+                        var url  = URL.createObjectURL(blob);
+                        var a    = document.createElement('a');
+                        a.href = url; a.download = r.data.filename || 'arve.pdf';
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a); URL.revokeObjectURL(url);
+                        msg.css('color','#16a34a').text('✓ PDF allalaaditud');
+                    } else {
+                        var err = (r.data && r.data.error) ? r.data.error : 'PDF viga';
+                        msg.css('color','#dc2626').text('✗ ' + err);
+                    }
+                }).fail(function(xhr){
+                    btn.prop('disabled', false).text('Laadi SA arve PDF');
+                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
                 });
             });
         });
