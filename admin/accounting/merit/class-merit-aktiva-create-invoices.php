@@ -195,10 +195,15 @@ class My_Simple_Ajax_Plugin {
             return [];
         }
 
-        $orders               = wc_get_orders( [ 'limit' => -1 ] );
-        $merit_server_invoices = new MeritServersDataClient();
-        $results              = $merit_server_invoices->get_all_invoices();
-        $filtered             = [];
+        $orders  = wc_get_orders( [ 'limit' => -1 ] );
+        $results = [];
+        try {
+            $merit_server_invoices = new MeritServersDataClient();
+            $results               = $merit_server_invoices->get_all_invoices();
+        } catch ( \Exception $e ) {
+            // Merit API pole kättesaadav — jätka ainult meta-flag kontrolliga
+        }
+        $filtered = [];
 
         foreach ( $orders as $order ) {
             if ( 'wc-' . $order->get_status() !== $this->order_Status ) {
@@ -630,7 +635,12 @@ class My_Simple_Ajax_Plugin {
         }
 
         $client  = new MeritServersDataClient();
-        $results = $client->get_all_invoices();
+        try {
+            $results = $client->get_all_invoices();
+        } catch ( \Exception $e ) {
+            wp_send_json_error( [ 'error' => 'Merit API viga: ' . $e->getMessage() ] );
+            return;
+        }
 
         if ( is_array( $results ) ) {
             foreach ( $results as $invoice ) {

@@ -179,13 +179,16 @@ class Smart_Wp_Integrations {
 			new SWI_Rik_Module();
 		}
 
-		// Smartpost pakiautomaadid
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-shipping.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-admin.php';
+		// Smartpost pakiautomaadid — shipping klass laetakse woocommerce_shipping_init hookis,
+		// kuna WC_Shipping_Method pole plugins_loaded ajal veel saadaval.
+		add_action( 'woocommerce_shipping_init', function() {
+			require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-shipping.php';
+		} );
 		add_filter( 'woocommerce_shipping_methods', function( $methods ) {
 			$methods['swi_smartpost'] = 'SWI_Smartpost_Shipping';
 			return $methods;
 		} );
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-admin.php';
 		new SWI_Smartpost_Admin();
 
 		// Kombineeritud meta-box edit order lehel

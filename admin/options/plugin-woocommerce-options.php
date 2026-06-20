@@ -380,14 +380,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <span class="swi-tab-badge <?php echo $rik_on ? 'on' : 'off'; ?>"><?php echo $rik_on ? 'aktiivne' : 'väljas'; ?></span>
                         </div>
                     </div>
-                    <!-- Rida 2: Tarne -->
+                    <!-- Rida 2 -->
                     <div class="swi-tabs-row">
-                        <span class="swi-tabs-label">🚚 Tarne</span>
                         <div class="swi-tab" data-tab="smartpost" onclick="swiTab('smartpost', this)">
                             📦 Smartpost
                             <span class="swi-tab-badge <?php echo $smartpost_on ? 'on' : 'off'; ?>"><?php echo $smartpost_on ? 'aktiivne' : 'väljas'; ?></span>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- ══ TAB: MERIT AKTIVA ══ -->
@@ -1861,9 +1861,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
-                <!-- ══════════════════════════════════════════════════
-                     SMARTPOST
-                ══════════════════════════════════════════════════ -->
+
+                <!-- ══ TAB: SMARTPOST ══ -->
                 <div class="swi-tabview" id="swi-tab-smartpost">
                     <nav class="swi-sidebar">
                         <div class="swi-sidebar-label">Smartpost</div>
@@ -1876,60 +1875,32 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </nav>
                     <div class="swi-content">
 
-                        <!-- ── Üldseaded ── -->
                         <div class="swi-panel active" id="swi-panel-sp-general">
                             <div class="swi-section-title">Smartpost – Üldseaded</div>
-                            <div class="swi-section-desc">
-                                Itella Smartpost pakiautomaadid WooCommerce kassas. Kuvab pakiautomaatide nimekirja otse Itella API-st (EE, LV, LT).
-                            </div>
+                            <div class="swi-section-desc">Itella Smartpost pakiautomaadid WooCommerce kassas.</div>
                             <input type="hidden" id="swi_sp_nonce" value="<?php echo wp_create_nonce('my_nonce'); ?>">
                             <div class="swi-card" style="max-width:680px;margin-bottom:20px;">
                                 <?php $this->render_toggle('swi_smartpost_enable', 'Luba Smartpost pakiautomaadid', $smartpost_on); ?>
                                 <table class="form-table" style="margin-top:16px;">
                                     <tr>
                                         <th style="width:200px;"><label for="swi_smartpost_license_key">Litsentsi võti</label></th>
-                                        <td>
-                                            <input type="text" id="swi_smartpost_license_key" name="swi_smartpost_license_key"
-                                                   class="regular-text"
-                                                   value="<?php echo esc_attr( get_option('swi_smartpost_license_key', '') ); ?>"
-                                                   placeholder="Kopeeri rakenduse litsentsi lehelt">
-                                        </td>
+                                        <td><input type="text" id="swi_smartpost_license_key" name="swi_smartpost_license_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_license_key', '') ); ?>" placeholder="Kopeeri rakenduse litsentsi lehelt"></td>
                                     </tr>
                                     <tr>
                                         <th><label for="swi_smartpost_crypto_key">Krüptovõti (HEX)</label></th>
-                                        <td>
-                                            <input type="text" id="swi_smartpost_crypto_key" name="swi_smartpost_crypto_key"
-                                                   class="regular-text"
-                                                   value="<?php echo esc_attr( get_option('swi_smartpost_crypto_key', '') ); ?>"
-                                                   placeholder="64-märgiline HEX — kopeeri rakenduse litsentsi lehelt">
-                                        </td>
+                                        <td><input type="text" id="swi_smartpost_crypto_key" name="swi_smartpost_crypto_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_crypto_key', '') ); ?>" placeholder="64-märgiline HEX"></td>
                                     </tr>
                                     <tr>
                                         <th><label for="swi_smartpost_title">Kuvatav nimi kassas</label></th>
-                                        <td>
-                                            <input type="text" id="swi_smartpost_title" name="swi_smartpost_title"
-                                                   class="regular-text"
-                                                   value="<?php echo esc_attr( get_option('swi_smartpost_title', 'Smartpost pakiautomaat') ); ?>">
-                                        </td>
+                                        <td><input type="text" id="swi_smartpost_title" name="swi_smartpost_title" class="regular-text" value="<?php echo esc_attr( get_option('swi_smartpost_title', 'Smartpost pakiautomaat') ); ?>"></td>
                                     </tr>
                                     <tr>
                                         <th><label for="swi_smartpost_cost">Tarnetasu (€)</label></th>
-                                        <td>
-                                            <input type="text" id="swi_smartpost_cost" name="swi_smartpost_cost"
-                                                   style="width:100px;"
-                                                   value="<?php echo esc_attr( get_option('swi_smartpost_cost', '3.99') ); ?>">
-                                            <p class="description">Sisesta 0 tasuta saatmiseks.</p>
-                                        </td>
+                                        <td><input type="text" id="swi_smartpost_cost" name="swi_smartpost_cost" style="width:100px;" value="<?php echo esc_attr( get_option('swi_smartpost_cost', '3.99') ); ?>"></td>
                                     </tr>
                                     <tr>
                                         <th><label for="swi_smartpost_free_min">Tasuta saatmise lävi (€)</label></th>
-                                        <td>
-                                            <input type="text" id="swi_smartpost_free_min" name="swi_smartpost_free_min"
-                                                   style="width:100px;"
-                                                   value="<?php echo esc_attr( get_option('swi_smartpost_free_min', '') ); ?>"
-                                                   placeholder="Jäta tühjaks">
-                                            <p class="description">Tellimused üle selle summa saavad tasuta saatmise.</p>
-                                        </td>
+                                        <td><input type="text" id="swi_smartpost_free_min" name="swi_smartpost_free_min" style="width:100px;" value="<?php echo esc_attr( get_option('swi_smartpost_free_min', '') ); ?>" placeholder="Jäta tühjaks"></td>
                                     </tr>
                                     <tr>
                                         <th>Riigid</th>
@@ -1938,25 +1909,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="EE" <?php checked( in_array('EE', $sp_countries, true) ); ?>> Eesti</label>
                                             <label style="margin-right:12px;"><input type="checkbox" name="swi_smartpost_countries[]" value="LV" <?php checked( in_array('LV', $sp_countries, true) ); ?>> Läti</label>
                                             <label><input type="checkbox" name="swi_smartpost_countries[]" value="LT" <?php checked( in_array('LT', $sp_countries, true) ); ?>> Leedu</label>
-                                            <p class="description">Milliste riikide tarneaadressidele pakiautomaat kuvatakse.</p>
                                         </td>
                                     </tr>
                                 </table>
                             </div>
-                            <div class="swi-alert info" style="max-width:680px;">
-                                ℹ <div>
-                                    Lisa <strong>Smartpost pakiautomaat</strong> WooCommerce saatmistsooni all (<em>WooCommerce → Seaded → Saatmine → Saatmistsoonid</em>), et see kassas kuvataks. Hind ja riigid seadistatakse siin ülal.
-                                </div>
-                            </div>
                         </div>
 
-                        <!-- ── Tööriistad ── -->
                         <div class="swi-panel" id="swi-panel-sp-tools">
                             <div class="swi-section-title">Smartpost – Tööriistad</div>
                             <div class="swi-section-desc">Pakiautomaatide nimekiri laetakse Itella serverist ja salvestatakse 12 tunniks vahemällu.</div>
                             <div class="swi-card" style="max-width:680px;">
                                 <p style="margin:0 0 8px;font-weight:600;font-size:12.5px;">Tühjenda pakiautomaatide cache</p>
-                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Kasuta kui pakiautomaatide nimekiri on muutunud ja tahad kohe uuendada.</p>
                                 <button type="button" id="swi-sp-flush-btn" class="button button-secondary">🔄 Tühjenda cache</button>
                                 <span id="swi-sp-flush-result" style="margin-left:10px;font-size:13px;"></span>
                                 <script>
@@ -2498,11 +2461,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_crypto_key',
                 'swi_rik_reg_label',
                 'swi_rik_vat_label',
-                'swi_smartpost_license_key',
-                'swi_smartpost_crypto_key',
-                'swi_smartpost_title',
-                'swi_smartpost_cost',
-                'swi_smartpost_free_min',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
@@ -2619,13 +2577,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_show_vat',
                 'swi_rik_reg_required',
                 'swi_rik_autofill_address',
-                'swi_smartpost_enable',
                 'swi_smartpost_license_key',
                 'swi_smartpost_crypto_key',
                 'swi_smartpost_title',
                 'swi_smartpost_cost',
                 'swi_smartpost_free_min',
-                'swi_smartpost_countries',
                 'smart_wp_integration_server_url',
                 'regno',
                 'swi_merit_email_notify',
