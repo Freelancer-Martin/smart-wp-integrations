@@ -352,9 +352,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 
                 <!-- TOP TABS -->
                 <div class="swi-tabs-wrap">
-                    <!-- Rida 1: Raamatupidamine -->
+                    <!-- Rida 1 -->
                     <div class="swi-tabs-row">
-                        <span class="swi-tabs-label">📑 Raamatupidamine</span>
                         <div class="swi-tab active" data-tab="merit" onclick="swiTab('merit', this)">
                             📊 Merit Aktiva
                             <span class="swi-tab-badge <?php echo $merit_on ? 'on' : 'off'; ?>"><?php echo $merit_on ? 'aktiivne' : 'väljas'; ?></span>
