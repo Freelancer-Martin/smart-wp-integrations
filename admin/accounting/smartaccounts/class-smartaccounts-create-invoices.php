@@ -376,11 +376,11 @@ class SWI_SmartAccounts_Create_Invoices {
             $inv_no = $prefix . $order_id;
         }
 
-        $api_url = trailingslashit( get_option( 'swi_api_url', '' ) );
-        $lic_key = get_option( 'swi_smartaccounts_license_key', get_option( 'swi_license_key', '' ) );
+        $api_url = trailingslashit( LocalApiClient::get_base_url_public() );
+        $lic_key = get_option( 'swi_smartaccounts_license_key', '' );
 
-        if ( ! $api_url || ! $lic_key ) {
-            wp_send_json_error( [ 'error' => 'API URL või litsents puudub seadetest.' ] );
+        if ( ! $api_url || ! filter_var( $api_url, FILTER_VALIDATE_URL ) || ! $lic_key ) {
+            wp_send_json_error( [ 'error' => 'API URL või SA litsents puudub seadetest.' ] );
         }
 
         $resp = wp_remote_get( $api_url . 'api/smartaccounts/invoice-pdf?invoiceNumber=' . rawurlencode( $inv_no ), [
