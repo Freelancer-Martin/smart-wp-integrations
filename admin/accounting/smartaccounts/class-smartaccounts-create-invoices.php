@@ -38,6 +38,10 @@ class SWI_SmartAccounts_Create_Invoices {
         add_action( 'wp_ajax_swi_sa_reset_single',   [ $this, 'handle_reset_single' ] );
         add_action( 'wp_ajax_swi_sa_bulk_send',     [ $this, 'handle_bulk_send' ] );
         add_action( 'wp_ajax_swi_sa_order_send',    [ $this, 'handle_order_send' ] );
+        add_action( 'wp_ajax_swi_sa_get_pdf',       [ $this, 'handle_get_pdf' ] );
+
+        add_filter( 'woocommerce_checkout_fields',             [ $this, 'register_checkout_fields' ] );
+        add_action( 'woocommerce_checkout_update_order_meta',  [ $this, 'save_checkout_fields' ] );
 
         // Kolumn on kombineeritud — vt class-swi-order-column.php
 
@@ -123,12 +127,12 @@ class SWI_SmartAccounts_Create_Invoices {
         $order    = wc_get_order( $order_id );
         if ( ! $order ) return;
 
-        $sent     = $order->get_meta( '_swi_sent_smartaccounts' );
-        $retry    = (int) $order->get_meta( '_swi_smartaccounts_retry_count' );
-        $retry_on = $order->get_meta( '_swi_smartaccounts_retry' );
-        $nonce    = wp_create_nonce( 'my_nonce' );
-        $prefix   = get_option( 'swi_smartaccounts_prefix', 'SA' );
-        $inv_no   = $prefix . $order_id;
+        $sent       = $order->get_meta( '_swi_sent_smartaccounts' );
+        $retry      = (int) $order->get_meta( '_swi_smartaccounts_retry_count' );
+        $retry_on   = $order->get_meta( '_swi_smartaccounts_retry' );
+        $nonce      = wp_create_nonce( 'my_nonce' );
+        $prefix     = get_option( 'swi_smartaccounts_prefix', 'SA' );
+        $inv_no     = $order->get_meta( '_swi_sa_invoice_number' ) ?: $prefix . $order_id;
         ?>
         <div id="swi-sa-metabox-<?php echo $order_id; ?>" style="font-size:12.5px;line-height:1.6;">
         <?php if ( $sent ) : ?>
@@ -149,34 +153,72 @@ class SWI_SmartAccounts_Create_Invoices {
                     class="button button-small swi-sa-order-send-btn"
                     data-id="<?php echo $order_id; ?>"
                     data-nonce="<?php echo $nonce; ?>"
-                    style="width:100%;">
+                    style="width:100%;margin-bottom:4px;">
                 <?php echo $sent ? 'Saada uuesti' : 'Saada Smart Accountsi'; ?>
             </button>
-            <span id="swi-sa-order-result-<?php echo $order_id; ?>" style="display:block;margin-top:6px;font-size:11.5px;"></span>
+            <?php if ( $sent ) : ?>
+            <button type="button"
+                    class="button button-small swi-sa-pdf-btn"
+                    data-id="<?php echo $order_id; ?>"
+                    data-nonce="<?php echo $nonce; ?>"
+                    style="width:100%;margin-bottom:4px;">
+                Laadi arve PDF
+            </button>
+            <?php endif; ?>
+            <span id="swi-sa-order-result-<?php echo $order_id; ?>" style="display:block;margin-top:4px;font-size:11.5px;"></span>
         <?php endif; ?>
         </div>
         <script>
         (function(){
             var btn = document.querySelector('.swi-sa-order-send-btn[data-id="<?php echo $order_id; ?>"]');
-            if (!btn) return;
-            btn.addEventListener('click', function(){
-                btn.disabled = true; btn.textContent = 'Saadan...';
-                var res = document.getElementById('swi-sa-order-result-<?php echo $order_id; ?>');
-                jQuery.post(ajaxurl, {
-                    action: 'swi_sa_order_send',
-                    security: btn.dataset.nonce,
-                    order_id: btn.dataset.id
-                }, function(r){
-                    btn.disabled = false;
-                    if (r.success) {
-                        btn.textContent = 'Saada uuesti';
-                        res.innerHTML = '<span style="color:#16a34a">✓ ' + (r.data.message||'Saadetud') + '</span>';
-                    } else {
-                        btn.textContent = 'Proovi uuesti';
-                        res.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
-                    }
-                }).fail(function(){ btn.disabled=false; btn.textContent='Proovi uuesti'; res.textContent='Ühendus katkes.'; });
-            });
+            if (btn) {
+                btn.addEventListener('click', function(){
+                    btn.disabled = true; btn.textContent = 'Saadan...';
+                    var res = document.getElementById('swi-sa-order-result-<?php echo $order_id; ?>');
+                    jQuery.post(ajaxurl, {
+                        action: 'swi_sa_order_send',
+                        security: btn.dataset.nonce,
+                        order_id: btn.dataset.id
+                    }, function(r){
+                        btn.disabled = false;
+                        if (r.success) {
+                            btn.textContent = 'Saada uuesti';
+                            res.innerHTML = '<span style="color:#16a34a">✓ ' + (r.data.message||'Saadetud') + '</span>';
+                        } else {
+                            btn.textContent = 'Proovi uuesti';
+                            res.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'Viga') + '</span>';
+                        }
+                    }).fail(function(){ btn.disabled=false; btn.textContent='Proovi uuesti'; res.textContent='Ühendus katkes.'; });
+                });
+            }
+            var pdfBtn = document.querySelector('.swi-sa-pdf-btn[data-id="<?php echo $order_id; ?>"]');
+            if (pdfBtn) {
+                pdfBtn.addEventListener('click', function(){
+                    pdfBtn.disabled = true; pdfBtn.textContent = 'Laen...';
+                    var res = document.getElementById('swi-sa-order-result-<?php echo $order_id; ?>');
+                    jQuery.post(ajaxurl, {
+                        action: 'swi_sa_get_pdf',
+                        security: pdfBtn.dataset.nonce,
+                        order_id: pdfBtn.dataset.id
+                    }, function(r){
+                        pdfBtn.disabled = false; pdfBtn.textContent = 'Laadi arve PDF';
+                        if (r.success && r.data.pdf_base64) {
+                            var byteStr = atob(r.data.pdf_base64);
+                            var arr = new Uint8Array(byteStr.length);
+                            for (var i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+                            var blob = new Blob([arr], {type:'application/pdf'});
+                            var url = URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url; a.download = r.data.filename || 'arve.pdf';
+                            document.body.appendChild(a); a.click();
+                            document.body.removeChild(a); URL.revokeObjectURL(url);
+                            res.innerHTML = '<span style="color:#16a34a">✓ PDF allalaaditud</span>';
+                        } else {
+                            res.innerHTML = '<span style="color:#dc2626">⚠ ' + ((r.data&&r.data.error)||'PDF viga') + '</span>';
+                        }
+                    }).fail(function(){ pdfBtn.disabled=false; pdfBtn.textContent='Laadi arve PDF'; res.textContent='Ühendus katkes.'; });
+                });
+            }
         })();
         </script>
         <?php
@@ -280,6 +322,86 @@ class SWI_SmartAccounts_Create_Invoices {
             swi_sa_log_send_history( $order_id, 'error', 'Käsitsi saatmine ebaõnnestus: ' . $msg );
             wp_send_json_error( [ 'error' => $msg ] );
         }
+    }
+
+    /* ─── Checkout: registrikood + KMKR väljad ─── */
+
+    public function register_checkout_fields( array $fields ): array {
+        $fields['billing']['billing_reg_no'] = [
+            'label'    => __( 'Registrikood', 'smart-wp-integrations' ),
+            'type'     => 'text',
+            'required' => false,
+            'class'    => [ 'form-row-first' ],
+            'priority' => 110,
+        ];
+        $fields['billing']['billing_vat_no'] = [
+            'label'    => __( 'KMKR nr', 'smart-wp-integrations' ),
+            'type'     => 'text',
+            'required' => false,
+            'class'    => [ 'form-row-last' ],
+            'priority' => 120,
+        ];
+        return $fields;
+    }
+
+    public function save_checkout_fields( int $order_id ): void {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return;
+        if ( ! empty( $_POST['billing_reg_no'] ) ) {
+            $order->update_meta_data( '_billing_reg_no', sanitize_text_field( $_POST['billing_reg_no'] ) );
+        }
+        if ( ! empty( $_POST['billing_vat_no'] ) ) {
+            $order->update_meta_data( '_billing_vat_no', sanitize_text_field( $_POST['billing_vat_no'] ) );
+        }
+        $order->save();
+    }
+
+    /* ─── AJAX: arve PDF allalaadimine ─── */
+
+    public function handle_get_pdf(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+
+        $order_id = absint( $_POST['order_id'] ?? 0 );
+        $order    = $order_id ? wc_get_order( $order_id ) : null;
+        if ( ! $order ) {
+            wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
+        }
+
+        $inv_no = $order->get_meta( '_swi_sa_invoice_number' );
+        if ( ! $inv_no ) {
+            $prefix = get_option( 'swi_smartaccounts_prefix', 'SA' );
+            $inv_no = $prefix . $order_id;
+        }
+
+        $api_url = trailingslashit( get_option( 'swi_api_url', '' ) );
+        $lic_key = get_option( 'swi_smartaccounts_license_key', get_option( 'swi_license_key', '' ) );
+
+        if ( ! $api_url || ! $lic_key ) {
+            wp_send_json_error( [ 'error' => 'API URL või litsents puudub seadetest.' ] );
+        }
+
+        $resp = wp_remote_get( $api_url . 'api/smartaccounts/invoice-pdf?invoiceNumber=' . rawurlencode( $inv_no ), [
+            'headers' => [ 'X-License-Token' => $lic_key ],
+            'timeout' => 20,
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            wp_send_json_error( [ 'error' => $resp->get_error_message() ] );
+        }
+
+        $code = wp_remote_retrieve_response_code( $resp );
+        if ( $code !== 200 ) {
+            wp_send_json_error( [ 'error' => 'SA PDF päring tagastas HTTP ' . $code . '.' ] );
+        }
+
+        $body = wp_remote_retrieve_body( $resp );
+        wp_send_json_success( [
+            'pdf_base64' => base64_encode( $body ),
+            'filename'   => 'arve-' . sanitize_file_name( $inv_no ) . '.pdf',
+        ] );
     }
 
     /* ─── AJAX: sünkroniseerimise kontroll ─── */
@@ -609,8 +731,8 @@ class SWI_SmartAccounts_Create_Invoices {
                 'country'   => $order->get_billing_country(),
             ],
             'meta_data'     => [
-                'company_reg_no' => $order->get_meta( '_billing_reg_no' ) ?: $order->get_meta( 'billing_reg_no' ) ?: '',
-                'company_vat_no' => $order->get_meta( '_billing_vat_no' ) ?: $order->get_meta( 'billing_vat_no' ) ?: '',
+                'company_reg_no' => $order->get_meta( '_billing_reg_no' ) ?: $order->get_meta( 'billing_reg_no' ) ?: $order->get_meta( 'company_code' ) ?: '',
+                'company_vat_no' => $order->get_meta( '_billing_vat_no' ) ?: $order->get_meta( 'billing_vat_no' ) ?: $order->get_meta( 'company_kmkr' ) ?: '',
             ],
             'items'         => $items,
         ];
