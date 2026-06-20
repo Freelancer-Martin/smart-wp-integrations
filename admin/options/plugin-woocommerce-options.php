@@ -2461,6 +2461,11 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_crypto_key',
                 'swi_rik_reg_label',
                 'swi_rik_vat_label',
+                'swi_smartpost_license_key',
+                'swi_smartpost_crypto_key',
+                'swi_smartpost_title',
+                'swi_smartpost_cost',
+                'swi_smartpost_free_min',
             ] as $field ) {
                 if ( isset( $_POST[ $field ] ) ) {
                     update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
