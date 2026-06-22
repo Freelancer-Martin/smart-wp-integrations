@@ -385,6 +385,16 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             📦 Smartpost
                             <span class="swi-tab-badge <?php echo $smartpost_on ? 'on' : 'off'; ?>"><?php echo $smartpost_on ? 'aktiivne' : 'väljas'; ?></span>
                         </div>
+                        <div class="swi-tab" data-tab="spc" onclick="swiTab('spc', this)">
+                            🚚 Smartpost Kuller
+                            <?php $spc_badge_on = get_option('swi_spc_enable') === 'yes'; ?>
+                            <span class="swi-tab-badge <?php echo $spc_badge_on ? 'on' : 'off'; ?>"><?php echo $spc_badge_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
+                        <div class="swi-tab" data-tab="iec" onclick="swiTab('iec', this)">
+                            🌍 Itella kuller EU
+                            <?php $iec_badge_on = get_option('swi_iec_enable') === 'yes'; ?>
+                            <span class="swi-tab-badge <?php echo $iec_badge_on ? 'on' : 'off'; ?>"><?php echo $iec_badge_on ? 'aktiivne' : 'väljas'; ?></span>
+                        </div>
                     </div>
 
                 </div>
@@ -2026,6 +2036,364 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     </div>
                 </div>
 
+
+                <!-- ══ TAB: SMARTPOST KULLER ══ -->
+                <div class="swi-tabview" id="swi-tab-spc">
+                    <nav class="swi-sidebar">
+                        <div class="swi-sidebar-label">Smartpost Kuller</div>
+                        <div class="swi-nav-item active" data-panel="spc-general" onclick="swiPanel('spc-general', this, 'spc')">
+                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        </div>
+                    </nav>
+                    <div class="swi-content">
+
+                        <div class="swi-panel active" id="swi-panel-spc-general">
+                            <div class="swi-section-title">Smartpost Kuller – Üldseaded</div>
+                            <div class="swi-section-desc">Itella Smartpost kullerteenus (kohaletoimetamine aadressile) WooCommerce kassas.</div>
+                            <?php
+                            $spc_on        = get_option('swi_spc_enable') === 'yes';
+                            $spc_countries = (array) get_option('swi_spc_countries', ['EE']);
+                            $spc_prices    = json_decode( get_option('swi_spc_prices', '{}'), true ) ?: [];
+                            $spc_cc_list   = ['EE' => 'Eesti'];
+                            $spc_sizes     = ['xs' => 'XS', 's' => 'S', 'm' => 'M', 'l' => 'L', 'xl' => 'XL'];
+                            $wc_statuses   = wc_get_order_statuses();
+                            ?>
+
+                            <!-- Üldseaded -->
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <?php $this->render_toggle('swi_spc_enable', 'Luba Smartpost kuller', $spc_on); ?>
+                                <table class="form-table" style="margin-top:16px;">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_spc_license_key">Litsentsi võti</label></th>
+                                        <td><input type="text" id="swi_spc_license_key" name="swi_spc_license_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_license_key', '') ); ?>" placeholder="Kopeeri rakenduse litsentsi lehelt"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_crypto_key">Krüptovõti (HEX)</label></th>
+                                        <td><input type="text" id="swi_spc_crypto_key" name="swi_spc_crypto_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_crypto_key', '') ); ?>" placeholder="64-märgiline HEX"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_title">Kuvatav nimi kassas</label></th>
+                                        <td><input type="text" id="swi_spc_title" name="swi_spc_title" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_title', 'Smartpost kuller') ); ?>"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Saatja info -->
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Saatja andmed</p>
+                                <table class="form-table">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_spc_sender_name">Saatja nimi</label></th>
+                                        <td><input type="text" id="swi_spc_sender_name" name="swi_spc_sender_name" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_sender_name', '') ); ?>"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_sender_phone">Saatja telefon</label></th>
+                                        <td><input type="text" id="swi_spc_sender_phone" name="swi_spc_sender_phone" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_sender_phone', '') ); ?>"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_sender_email">Saatja email</label></th>
+                                        <td><input type="email" id="swi_spc_sender_email" name="swi_spc_sender_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_sender_email', '') ); ?>"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Pakisildi seaded -->
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
+                                <?php $this->render_toggle('swi_spc_auto_send',       'Paki andmed saadetakse automaatselt',            get_option('swi_spc_auto_send')       === 'yes'); ?>
+                                <?php $this->render_toggle('swi_spc_add_tracking',    'Lisa jälgimiskood täidetud tellimuse e-mailile', get_option('swi_spc_add_tracking')    === 'yes'); ?>
+                                <?php $this->render_toggle('swi_spc_send_label_copy', 'Saada pakisildi koopia e-mailile',               get_option('swi_spc_send_label_copy')  === 'yes'); ?>
+                                <table class="form-table" style="margin-top:8px;">
+                                    <tr>
+                                        <th style="width:230px;"><label for="swi_spc_label_size">Pakisildi mõõt</label></th>
+                                        <td>
+                                            <select id="swi_spc_label_size" name="swi_spc_label_size">
+                                                <?php foreach (['A4' => 'A4', 'A5' => 'A5', 'A6' => 'A6', 'THERMAL' => 'Thermal (102×210)'] as $v => $l) : ?>
+                                                <option value="<?php echo esc_attr($v); ?>" <?php selected( get_option('swi_spc_label_size', 'A4'), $v ); ?>><?php echo esc_html($l); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_status_after_label">Olek peale printimist</label></th>
+                                        <td>
+                                            <select id="swi_spc_status_after_label" name="swi_spc_status_after_label">
+                                                <option value="">— Ära muuda —</option>
+                                                <?php foreach ( $wc_statuses as $slug => $label ) : ?>
+                                                <option value="<?php echo esc_attr($slug); ?>" <?php selected( get_option('swi_spc_status_after_label', ''), $slug ); ?>><?php echo esc_html($label); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_spc_label_email">Koopia e-mail aadress</label></th>
+                                        <td><input type="email" id="swi_spc_label_email" name="swi_spc_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_spc_label_email', '') ); ?>" placeholder="email@näide.ee"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Lubatud riigid + hinnad -->
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Lubatud riigid ja hinnad</p>
+                                <p style="margin:0 0 16px;font-size:12.5px;color:#6b7280;">Märgi riik aktiivseks ja sisesta hinnad (€, km-ta). Tasuta alates: ostukorvi summa millest alates saatmine on tasuta.</p>
+                                <table style="border-collapse:collapse;width:100%;font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#f9f9f9;">
+                                            <th style="padding:8px 10px;text-align:left;border:1px solid #e5e7eb;width:100px;">Riik</th>
+                                            <?php foreach ($spc_sizes as $sk => $sl) : ?>
+                                            <th style="padding:8px 10px;text-align:center;border:1px solid #e5e7eb;"><?php echo esc_html($sl); ?></th>
+                                            <?php endforeach; ?>
+                                            <th style="padding:8px 10px;text-align:center;border:1px solid #e5e7eb;">Tasuta alates</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($spc_cc_list as $cc => $ccname) :
+                                        $active = in_array($cc, $spc_countries, true);
+                                        $prices = $spc_prices[$cc] ?? [];
+                                    ?>
+                                        <tr>
+                                            <td style="padding:8px 10px;border:1px solid #e5e7eb;">
+                                                <label><input type="checkbox" name="swi_spc_countries[]" value="<?php echo esc_attr($cc); ?>" <?php checked($active); ?>> <?php echo esc_html($ccname); ?></label>
+                                            </td>
+                                            <?php foreach ($spc_sizes as $sk => $sl) : ?>
+                                            <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">
+                                                <input type="text" name="swi_spc_price[<?php echo esc_attr($cc); ?>][<?php echo esc_attr($sk); ?>]"
+                                                       value="<?php echo esc_attr( $prices[$sk] ?? '' ); ?>"
+                                                       style="width:64px;text-align:center;" placeholder="—">
+                                            </td>
+                                            <?php endforeach; ?>
+                                            <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:center;">
+                                                <input type="text" name="swi_spc_price[<?php echo esc_attr($cc); ?>][free]"
+                                                       value="<?php echo esc_attr( $prices['free'] ?? '' ); ?>"
+                                                       style="width:64px;text-align:center;" placeholder="—">
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <p style="margin:10px 0 0;font-size:12px;color:#9ca3af;">XS ≤ 2 kg &nbsp;|&nbsp; S ≤ 5 kg &nbsp;|&nbsp; M ≤ 10 kg &nbsp;|&nbsp; L ≤ 20 kg &nbsp;|&nbsp; XL ≤ 35 kg</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div><!-- #swi-tab-spc -->
+
+                <div class="swi-tabview" id="swi-tab-iec">
+                    <nav class="swi-sidebar">
+                        <div class="swi-sidebar-label">Itella kuller EU</div>
+                        <div class="swi-nav-item active" data-panel="iec-general" onclick="swiPanel('iec-general', this, 'iec')">
+                            <span class="swi-nav-icon">⚙</span> Üldseaded
+                        </div>
+                    </nav>
+                    <div class="swi-content">
+
+                        <div class="swi-panel active" id="swi-panel-iec-general">
+                            <div class="swi-section-title">Itella kuller EU – Üldseaded</div>
+                            <div class="swi-section-desc">Itella kullerteenus Euroopa riikidesse. Kohaletoimetamine aadressile.</div>
+                            <?php
+                            $iec_on      = get_option('swi_iec_enable') === 'yes';
+                            $iec_prices  = json_decode( get_option('swi_iec_prices', '{}'), true ) ?: [];
+                            $iec_sizes   = ['xs' => 'XS', 's' => 'S', 'm' => 'M', 'l' => 'L', 'xl' => 'XL'];
+                            $wc_statuses = wc_get_order_statuses();
+                            $all_countries = WC()->countries ? WC()->countries->get_countries() : [];
+                            ?>
+
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <?php $this->render_toggle('swi_iec_enable', 'Luba Itella kuller EU', $iec_on); ?>
+                                <table class="form-table" style="margin-top:16px;">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_iec_license_key">Litsentsi võti</label></th>
+                                        <td><input type="text" id="swi_iec_license_key" name="swi_iec_license_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_license_key', '') ); ?>" placeholder="Kopeeri rakenduse litsentsi lehelt"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_crypto_key">Krüptovõti (HEX)</label></th>
+                                        <td><input type="text" id="swi_iec_crypto_key" name="swi_iec_crypto_key" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_crypto_key', '') ); ?>" placeholder="64-märgiline HEX"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_title">Kuvatav nimi kassas</label></th>
+                                        <td><input type="text" id="swi_iec_title" name="swi_iec_title" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_title', 'Itella kuller EU') ); ?>"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:13px;">Saatja andmed</p>
+                                <table class="form-table">
+                                    <tr>
+                                        <th style="width:200px;"><label for="swi_iec_sender_name">Saatja nimi</label></th>
+                                        <td><input type="text" id="swi_iec_sender_name" name="swi_iec_sender_name" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_sender_name', '') ); ?>"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_sender_phone">Saatja telefon</label></th>
+                                        <td><input type="text" id="swi_iec_sender_phone" name="swi_iec_sender_phone" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_sender_phone', '') ); ?>"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_sender_email">Saatja email</label></th>
+                                        <td><input type="email" id="swi_iec_sender_email" name="swi_iec_sender_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_sender_email', '') ); ?>"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:13px;">Pakisildi seaded</p>
+                                <?php $this->render_toggle('swi_iec_auto_send',       'Paki andmed saadetakse automaatselt',            get_option('swi_iec_auto_send')       === 'yes'); ?>
+                                <?php $this->render_toggle('swi_iec_add_tracking',    'Lisa jälgimiskood täidetud tellimuse e-mailile', get_option('swi_iec_add_tracking')    === 'yes'); ?>
+                                <?php $this->render_toggle('swi_iec_send_label_copy', 'Saada pakisildi koopia e-mailile',               get_option('swi_iec_send_label_copy') === 'yes'); ?>
+                                <table class="form-table" style="margin-top:8px;">
+                                    <tr>
+                                        <th style="width:230px;"><label for="swi_iec_label_size">Pakisildi mõõt</label></th>
+                                        <td>
+                                            <select id="swi_iec_label_size" name="swi_iec_label_size">
+                                                <?php foreach (['A4' => 'A4', 'A5' => 'A5', 'A6' => 'A6', 'THERMAL' => 'Thermal (102×210)'] as $v => $l) : ?>
+                                                <option value="<?php echo esc_attr($v); ?>" <?php selected( get_option('swi_iec_label_size', 'A4'), $v ); ?>><?php echo esc_html($l); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_status_after_label">Olek peale printimist</label></th>
+                                        <td>
+                                            <select id="swi_iec_status_after_label" name="swi_iec_status_after_label">
+                                                <option value="">— Ära muuda —</option>
+                                                <?php foreach ( $wc_statuses as $slug => $label ) : ?>
+                                                <option value="<?php echo esc_attr($slug); ?>" <?php selected( get_option('swi_iec_status_after_label', ''), $slug ); ?>><?php echo esc_html($label); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label for="swi_iec_label_email">Koopia e-mail aadress</label></th>
+                                        <td><input type="email" id="swi_iec_label_email" name="swi_iec_label_email" class="regular-text" value="<?php echo esc_attr( get_option('swi_iec_label_email', '') ); ?>" placeholder="email@näide.ee"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="swi-card" style="margin-bottom:20px;">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:13px;">Hinnad</p>
+                                <p style="margin:0 0 14px;font-size:12.5px;color:#6b7280;">Sisesta hinnad (€, km-ta). Konkreetne riigi rida on tähtsam kui "Kõik ülejäänud riigid". Tasuta alates: ostukorvi summa.</p>
+                                <?php
+                                $iec_th = 'padding:8px 10px;text-align:center;border:1px solid #e5e7eb;';
+                                $iec_td = 'padding:6px 8px;border:1px solid #e5e7eb;text-align:center;';
+                                ?>
+                                <table style="border-collapse:collapse;width:100%;font-size:13px;" id="swi-iec-price-table">
+                                    <thead>
+                                        <tr style="background:#f9f9f9;">
+                                            <th style="padding:8px 10px;text-align:left;border:1px solid #e5e7eb;min-width:160px;">Riik</th>
+                                            <?php foreach ($iec_sizes as $sk => $sl) : ?>
+                                            <th style="<?php echo $iec_th; ?>"><?php echo esc_html($sl); ?></th>
+                                            <?php endforeach; ?>
+                                            <th style="<?php echo $iec_th; ?>">Tasuta alates</th>
+                                            <th style="<?php echo $iec_th; ?>width:30px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="swi-iec-price-rows">
+
+                                    <?php
+                                    // DEFAULT rida — alati esimene, eemaldatav ei ole
+                                    $def = $iec_prices['DEFAULT'] ?? [];
+                                    $def_on = ($def['enabled'] ?? 'yes') === 'yes';
+                                    ?>
+                                    <tr data-cc="DEFAULT">
+                                        <td style="padding:8px 10px;border:1px solid #e5e7eb;">
+                                            <label style="font-weight:600;">
+                                                <input type="checkbox" name="swi_iec_price[DEFAULT][enabled]" value="yes" <?php checked($def_on); ?>>
+                                                Kõik ülejäänud riigid
+                                            </label>
+                                        </td>
+                                        <?php foreach ($iec_sizes as $sk => $sl) : ?>
+                                        <td style="<?php echo $iec_td; ?>">
+                                            <input type="text" name="swi_iec_price[DEFAULT][<?php echo esc_attr($sk); ?>]"
+                                                   value="<?php echo esc_attr( $def[$sk] ?? '' ); ?>"
+                                                   style="width:64px;text-align:center;" placeholder="—">
+                                        </td>
+                                        <?php endforeach; ?>
+                                        <td style="<?php echo $iec_td; ?>">
+                                            <input type="text" name="swi_iec_price[DEFAULT][free]"
+                                                   value="<?php echo esc_attr( $def['free'] ?? '' ); ?>"
+                                                   style="width:64px;text-align:center;" placeholder="—">
+                                        </td>
+                                        <td style="<?php echo $iec_td; ?>"></td>
+                                    </tr>
+
+                                    <?php foreach ($iec_prices as $cc => $row) :
+                                        if ($cc === 'DEFAULT') continue;
+                                        $cc      = strtoupper($cc);
+                                        $ccname  = $all_countries[$cc] ?? $cc;
+                                        $row_on  = ($row['enabled'] ?? 'yes') === 'yes';
+                                    ?>
+                                    <tr data-cc="<?php echo esc_attr($cc); ?>">
+                                        <td style="padding:8px 10px;border:1px solid #e5e7eb;">
+                                            <label>
+                                                <input type="checkbox" name="swi_iec_price[<?php echo esc_attr($cc); ?>][enabled]" value="yes" <?php checked($row_on); ?>>
+                                                <?php echo esc_html($ccname); ?>
+                                            </label>
+                                        </td>
+                                        <?php foreach ($iec_sizes as $sk => $sl) : ?>
+                                        <td style="<?php echo $iec_td; ?>">
+                                            <input type="text" name="swi_iec_price[<?php echo esc_attr($cc); ?>][<?php echo esc_attr($sk); ?>]"
+                                                   value="<?php echo esc_attr( $row[$sk] ?? '' ); ?>"
+                                                   style="width:64px;text-align:center;" placeholder="—">
+                                        </td>
+                                        <?php endforeach; ?>
+                                        <td style="<?php echo $iec_td; ?>">
+                                            <input type="text" name="swi_iec_price[<?php echo esc_attr($cc); ?>][free]"
+                                                   value="<?php echo esc_attr( $row['free'] ?? '' ); ?>"
+                                                   style="width:64px;text-align:center;" placeholder="—">
+                                        </td>
+                                        <td style="<?php echo $iec_td; ?>">
+                                            <button type="button" onclick="this.closest('tr').remove()"
+                                                    style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:2px 6px;" title="Eemalda">×</button>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+
+                                    </tbody>
+                                </table>
+
+                                <!-- Lisa riik -->
+                                <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+                                    <select id="swi-iec-new-cc" style="max-width:220px;">
+                                        <option value="">— Vali riik —</option>
+                                        <?php foreach ($all_countries as $c_cc => $c_name) : ?>
+                                        <option value="<?php echo esc_attr($c_cc); ?>"><?php echo esc_html($c_name); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="button" class="button button-secondary" onclick="swiIecAddRow()">+ Lisa riik</button>
+                                </div>
+                                <p style="margin:10px 0 0;font-size:12px;color:#9ca3af;">XS ≤ 2 kg &nbsp;|&nbsp; S ≤ 5 kg &nbsp;|&nbsp; M ≤ 10 kg &nbsp;|&nbsp; L ≤ 20 kg &nbsp;|&nbsp; XL ≤ 35 kg</p>
+
+                                <script>
+                                function swiIecAddRow() {
+                                    var sel  = document.getElementById('swi-iec-new-cc');
+                                    var cc   = sel.value;
+                                    var name = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : cc;
+                                    if (!cc) return;
+                                    if (document.querySelector('#swi-iec-price-rows tr[data-cc="' + cc + '"]')) {
+                                        alert(name + ' on juba lisatud.');
+                                        return;
+                                    }
+                                    var td   = 'padding:6px 8px;border:1px solid #e5e7eb;text-align:center;';
+                                    var sizes = ['xs','s','m','l','xl'];
+                                    var html = '<tr data-cc="' + cc + '">';
+                                    html += '<td style="padding:8px 10px;border:1px solid #e5e7eb;">';
+                                    html += '<label><input type="checkbox" name="swi_iec_price[' + cc + '][enabled]" value="yes" checked> ' + name + '</label>';
+                                    html += '</td>';
+                                    sizes.forEach(function(sz) {
+                                        html += '<td style="' + td + '"><input type="text" name="swi_iec_price[' + cc + '][' + sz + ']" style="width:64px;text-align:center;" placeholder="—"></td>';
+                                    });
+                                    html += '<td style="' + td + '"><input type="text" name="swi_iec_price[' + cc + '][free]" style="width:64px;text-align:center;" placeholder="—"></td>';
+                                    html += '<td style="' + td + '"><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:2px 6px;" title="Eemalda">×</button></td>';
+                                    html += '</tr>';
+                                    document.getElementById('swi-iec-price-rows').insertAdjacentHTML('beforeend', html);
+                                    sel.value = '';
+                                }
+                                </script>
+                            </div>
+                        </div>
+
+                    </div>
+                </div><!-- #swi-tab-iec -->
+
             </div><!-- .swi-frame -->
 
             <script>
@@ -2590,6 +2958,90 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             }
             update_option( 'swi_smartpost_prices', wp_json_encode( $sp_prices ) );
 
+            // Smartpost Kuller — tekst- ja emailiväljad
+            foreach ( [
+                'swi_spc_license_key',
+                'swi_spc_crypto_key',
+                'swi_spc_title',
+                'swi_spc_sender_name',
+                'swi_spc_sender_phone',
+                'swi_spc_sender_email',
+                'swi_spc_label_email',
+            ] as $field ) {
+                if ( isset( $_POST[ $field ] ) ) {
+                    update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
+                }
+            }
+
+            // Smartpost Kuller — toggles
+            foreach ( [ 'swi_spc_auto_send', 'swi_spc_add_tracking', 'swi_spc_send_label_copy' ] as $tog ) {
+                update_option( $tog, isset( $_POST[ $tog ] ) && $_POST[ $tog ] === 'yes' ? 'yes' : 'no' );
+            }
+
+            // Smartpost Kuller — select väljad
+            foreach ( [ 'swi_spc_label_size', 'swi_spc_status_after_label' ] as $sel ) {
+                if ( isset( $_POST[ $sel ] ) ) {
+                    update_option( $sel, sanitize_text_field( wp_unslash( $_POST[ $sel ] ) ) );
+                }
+            }
+
+            // Smartpost Kuller — riigid
+            $spc_countries = isset( $_POST['swi_spc_countries'] ) ? array_map( 'sanitize_text_field', (array) $_POST['swi_spc_countries'] ) : [];
+            update_option( 'swi_spc_countries', $spc_countries );
+
+            // Smartpost Kuller — hinnad
+            $spc_price_raw = $_POST['swi_spc_price'] ?? [];
+            $spc_prices    = [];
+            $spc_cc_list   = ['EE'];
+            foreach ( $spc_cc_list as $cc ) {
+                foreach ( $sp_sizes as $sz ) {
+                    $val = $spc_price_raw[$cc][$sz] ?? '';
+                    $spc_prices[$cc][$sz] = sanitize_text_field( $val );
+                }
+            }
+            update_option( 'swi_spc_prices', wp_json_encode( $spc_prices ) );
+
+            // Itella kuller EU — tekst- ja emailiväljad
+            foreach ( [
+                'swi_iec_license_key',
+                'swi_iec_crypto_key',
+                'swi_iec_title',
+                'swi_iec_sender_name',
+                'swi_iec_sender_phone',
+                'swi_iec_sender_email',
+                'swi_iec_label_email',
+            ] as $field ) {
+                if ( isset( $_POST[ $field ] ) ) {
+                    update_option( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
+                }
+            }
+
+            // Itella kuller EU — toggles
+            foreach ( [ 'swi_iec_auto_send', 'swi_iec_add_tracking', 'swi_iec_send_label_copy' ] as $tog ) {
+                update_option( $tog, isset( $_POST[ $tog ] ) && $_POST[ $tog ] === 'yes' ? 'yes' : 'no' );
+            }
+
+            // Itella kuller EU — select väljad
+            foreach ( [ 'swi_iec_label_size', 'swi_iec_status_after_label' ] as $sel ) {
+                if ( isset( $_POST[ $sel ] ) ) {
+                    update_option( $sel, sanitize_text_field( wp_unslash( $_POST[ $sel ] ) ) );
+                }
+            }
+
+            // Itella kuller EU — hinnad (dünaamiline riikide nimekiri)
+            $iec_price_raw = $_POST['swi_iec_price'] ?? [];
+            $iec_prices    = [];
+            $iec_sizes_save = ['xs', 's', 'm', 'l', 'xl', 'free'];
+            foreach ( $iec_price_raw as $cc => $data ) {
+                $cc = strtoupper( sanitize_key( $cc ) );
+                if ( empty( $cc ) ) continue;
+                $iec_prices[$cc]['enabled'] = ( isset( $data['enabled'] ) && $data['enabled'] === 'yes' ) ? 'yes' : 'no';
+                foreach ( $iec_sizes_save as $sz ) {
+                    $iec_prices[$cc][$sz] = sanitize_text_field( $data[$sz] ?? '' );
+                }
+            }
+            update_option( 'swi_iec_prices', wp_json_encode( $iec_prices ) );
+
             // Select fields
             foreach ( [
                 'smart_wp_integtaion_invoice_status',
@@ -2617,6 +3069,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_rik_reg_required',
                 'swi_rik_autofill_address',
                 'swi_smartpost_enable',
+                'swi_spc_enable',
+                'swi_iec_enable',
                 'swi_merit_email_notify',
             ] as $field ) {
                 $val = sanitize_text_field( wp_unslash( $_POST[ $field ] ?? 'no' ) );

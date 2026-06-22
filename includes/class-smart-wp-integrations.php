@@ -183,13 +183,21 @@ class Smart_Wp_Integrations {
 		// kuna WC_Shipping_Method pole plugins_loaded ajal veel saadaval.
 		add_action( 'woocommerce_shipping_init', function() {
 			require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-shipping.php';
+			require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-courier-shipping.php';
+			require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/itella/class-itella-eu-courier-shipping.php';
 		} );
 		add_filter( 'woocommerce_shipping_methods', function( $methods ) {
-			$methods['swi_smartpost'] = 'SWI_Smartpost_Shipping';
+			$methods['swi_smartpost']           = 'SWI_Smartpost_Shipping';
+			$methods['swi_smartpost_courier']   = 'SWI_Smartpost_Courier_Shipping';
+			$methods['swi_itella_eu_courier']   = 'SWI_Itella_EU_Courier_Shipping';
 			return $methods;
 		} );
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-admin.php';
 		new SWI_Smartpost_Admin();
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/smartpost/class-smartpost-courier-admin.php';
+		new SWI_Smartpost_Courier_Admin();
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/shipping/itella/class-itella-eu-courier-admin.php';
+		new SWI_Itella_EU_Courier_Admin();
 
 		// Kombineeritud meta-box edit order lehel
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-swi-order-metabox.php';
