@@ -65,6 +65,9 @@ class MeritServersDataClient {
      * @return array Osakondade koodide massiiv, nt ['SALES', 'SUPPORT', 'WAREHOUSE'].
      */
     public function getDepartments(): array {
+        $cached = get_transient( 'swi_merit_departments' );
+        if ( $cached !== false ) return $cached;
+
         $data = $this->call( 'merit/departments' );
         $list = $data['departments'] ?? [];
 
@@ -75,6 +78,7 @@ class MeritServersDataClient {
             }
         }
 
+        set_transient( 'swi_merit_departments', $codes, 10 * MINUTE_IN_SECONDS );
         return $codes;
     }
 

@@ -104,6 +104,11 @@ class LocalApiClient {
      * @return string|null Null kui ühendus OK, veateade string kui probleem.
      */
     public static function pingServer(): ?string {
+        $cached = get_transient( 'swi_server_ping' );
+        if ( $cached !== false ) {
+            return $cached === '__ok__' ? null : $cached;
+        }
+
         $license_key = get_option( 'smart_wp_integtaion_license_text', '' );
 
         $resp = wp_remote_get( self::get_health_endpoint(), [
@@ -115,14 +120,19 @@ class LocalApiClient {
         ] );
 
         if ( is_wp_error( $resp ) ) {
-            return $resp->get_error_message();
+            $error = $resp->get_error_message();
+            set_transient( 'swi_server_ping', $error, 30 );
+            return $error;
         }
 
         $code = wp_remote_retrieve_response_code( $resp );
         if ( $code < 200 || $code >= 300 ) {
-            return sprintf( 'HTTP %d: %s', $code, wp_strip_all_tags( wp_remote_retrieve_body( $resp ) ) );
+            $error = sprintf( 'HTTP %d: %s', $code, wp_strip_all_tags( wp_remote_retrieve_body( $resp ) ) );
+            set_transient( 'swi_server_ping', $error, 30 );
+            return $error;
         }
 
+        set_transient( 'swi_server_ping', '__ok__', 30 );
         return null;
     }
 
