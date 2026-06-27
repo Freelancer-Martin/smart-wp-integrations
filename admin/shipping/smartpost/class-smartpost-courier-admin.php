@@ -101,17 +101,20 @@ class SWI_Smartpost_Courier_Admin {
         $order->save();
 
         // Saada pakisildi koopia e-mailile kui seadistatud
-        $copy_email = get_option( 'swi_spc_label_email', '' );
-        if ( $copy_email ) {
-            $this->send_label_email( $order_id, $barcode, $copy_email, $license_key, $base_url );
+        if ( get_option( 'swi_spc_send_label_copy' ) === 'yes' ) {
+            $copy_email = get_option( 'swi_spc_label_email', '' );
+            if ( $copy_email ) {
+                $this->send_label_email( $order_id, $barcode, $copy_email, $license_key, $base_url );
+            }
         }
 
         return $barcode;
     }
 
     private function send_label_email( int $order_id, string $barcode, string $to, string $license_key, string $base_url ): void {
+        $size = get_option( 'swi_spc_label_size', 'A4' );
         $resp = wp_remote_get(
-            $base_url . '/api/smartpost/courier/label?barcode=' . urlencode( $barcode ) . '&order_id=' . $order_id,
+            $base_url . '/api/smartpost/courier/label?barcode=' . urlencode( $barcode ) . '&order_id=' . $order_id . '&size=' . urlencode( $size ),
             [
                 'timeout' => 30,
                 'headers' => [
@@ -281,9 +284,10 @@ class SWI_Smartpost_Courier_Admin {
         $license_key = get_option( 'swi_spc_license_key', '' );
         if ( ! $barcode || ! $license_key ) wp_die( 'Vöötkood või litsentsi võti puudub.' );
 
+        $size     = get_option( 'swi_spc_label_size', 'A4' );
         $base_url = rtrim( get_option( 'smart_wp_integration_server_url', '' ), '/' ) ?: 'http://172.168.10.105';
         $resp = wp_remote_get(
-            $base_url . '/api/smartpost/courier/label?barcode=' . urlencode( $barcode ) . '&order_id=' . $order_id,
+            $base_url . '/api/smartpost/courier/label?barcode=' . urlencode( $barcode ) . '&order_id=' . $order_id . '&size=' . urlencode( $size ),
             [
                 'timeout' => 30,
                 'headers' => [
