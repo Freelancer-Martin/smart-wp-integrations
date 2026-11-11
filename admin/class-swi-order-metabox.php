@@ -123,7 +123,7 @@ class SWI_Order_Metabox {
                     if ( ! $refund->get_meta( '_swi_merit_credit_sent' ) ) { $has_open_refund = true; break; }
                 }
             ?>
-            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;">
+            <div id="swi-mb-merit-actions" style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;">
                 <div style="font-size:11px;color:#9ca3af;margin-bottom:4px;">Merit Aktiva</div>
                 <div style="display:flex;flex-direction:column;gap:4px;">
                     <button id="swi-mb-merit-status-btn" class="button" style="height:26px;font-size:11px;"
@@ -166,6 +166,16 @@ class SWI_Order_Metabox {
         ?>
         <script>
         jQuery(function($){
+            // Merit-spetsiifilised nupud (staatus/makse/kreediitarve/kustutus) käivad ainult
+            // kui ülal valitud integratsioon on 'merit' — vastasel juhul on need eksitavad
+            // (nt Smart Accounts valitud, aga näed Meriti nuppe).
+            function swiToggleMeritActions() {
+                var selected = $('#swi-mb-service').val();
+                $('#swi-mb-merit-actions').toggle(selected === 'merit');
+            }
+            swiToggleMeritActions();
+            $('#swi-mb-service').on('change', swiToggleMeritActions);
+
             $('#swi-mb-send').on('click', function(){
                 var btn    = $(this);
                 var sel    = $('#swi-mb-service');
