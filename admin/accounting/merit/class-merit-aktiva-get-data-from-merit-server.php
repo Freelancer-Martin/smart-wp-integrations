@@ -139,4 +139,109 @@ class MeritServersDataClient {
         $data = $this->call( 'merit/vatcodes' );
         return $data['vatcodes'] ?? [];
     }
+
+    /**
+     * Sisemine abimeetod: saada autenditud POST päring (JSON body) vaheserverisse.
+     *
+     * Samad põhimõtted mis call()-il, aga kirjutavate päringute jaoks (makse, kliendi/toote sync,
+     * arve kustutamine) — neil on JSON body, mitte ainult query string.
+     *
+     * @param string $path API tee ilma algse kaldkriipsuta, nt 'merit/payment'.
+     * @param array  $body Saadetav JSON body.
+     * @return array Dekodeeritud JSON vastus massiivina.
+     * @throws RuntimeException Võrguühenduse viga või mitte-2xx HTTP vastuse korral.
+     */
+    private function call_post( string $path, array $body = [] ): array {
+        $base        = LocalApiClient::get_base_url_public();
+        $license_key = get_option( 'smart_wp_integtaion_license_text', '' );
+
+        $resp = wp_remote_post( rtrim( $base, '/' ) . '/api/' . ltrim( $path, '/' ), [
+            'timeout' => 15,
+            'headers' => [
+                'X-License-Token' => $license_key,
+                'Accept'          => 'application/json',
+                'Content-Type'    => 'application/json',
+            ],
+            'body' => wp_json_encode( $body ),
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            throw new RuntimeException( $resp->get_error_message() );
+        }
+
+        $code      = wp_remote_retrieve_response_code( $resp );
+        $resp_body = wp_remote_retrieve_body( $resp );
+        $data      = json_decode( $resp_body, true );
+
+        if ( $code < 200 || $code >= 300 ) {
+            $msg = $data['error'] ?? $resp_body;
+            throw new RuntimeException( "HTTP {$code}: {$msg}" );
+        }
+
+        return $data ?? [];
+    }
+
+    /**
+     * Märgib Meriti arve tasutuks (vt api.merit.ee sendpayment).
+     *
+     * @param string      $invoice_no    Arve number (nt 'WP123').
+     * @param float       $amount        Makse summa.
+     * @param string      $payment_date  Makse kuupäev kujul Y-m-d.
+     * @param string|null $customer_name Kliendi nimi (valikuline, aitab Meritil täpsemalt sobitada).
+     * @return array Laravel-i proxy vastus.
+     */
+    public function send_payment( string $invoice_no, float $amount, string $payment_date, ?string $customer_name = null ): array {
+        return $this->call_post( 'merit/payment', [
+            'invoice_no'    => $invoice_no,
+            'amount'        => $amount,
+            'payment_date'  => $payment_date,
+            'customer_name' => $customer_name,
+        ] );
+    }
+
+    /**
+     * Loob või uuendab Meriti kliendikaarti.
+     *
+     * Kui $fields sisaldab 'merit_customer_id', uuendatakse olemasolevat kaarti,
+     * vastasel juhul luuakse uus ja Laravel tagastab vastuses uue 'Id'.
+     *
+     * @param array $fields Kliendi väljad (name, country_code, email, reg_no, merit_customer_id jne).
+     * @return array Laravel-i proxy vastus.
+     */
+    public function sync_customer( array $fields ): array {
+        return $this->call_post( 'merit/customer', $fields );
+    }
+
+    /**
+     * Loob või uuendab Meriti tootekaardi.
+     *
+     * Kui $fields sisaldab 'merit_item_id', uuendatakse olemasolevat kaarti,
+     * vastasel juhul luuakse uus ja Laravel tagastab vastuses uue ItemId-i.
+     *
+     * @param array $fields Toote väljad (code, description, sales_price, merit_item_id jne).
+     * @return array Laravel-i proxy vastus.
+     */
+    public function sync_item( array $fields ): array {
+        return $this->call_post( 'merit/item', $fields );
+    }
+
+    /**
+     * Tagastab Meriti arve täisdetailid (päised + arveread) arve numbri järgi.
+     *
+     * @param string $invoice_no Arve number (nt 'WP123').
+     * @return array Arve detailid ('invoice') ja kokkuvõte ('summary').
+     */
+    public function get_invoice_details( string $invoice_no ): array {
+        return $this->call( 'merit/invoice/details?invoice_no=' . rawurlencode( $invoice_no ) );
+    }
+
+    /**
+     * Kustutab Meriti arve arve numbri järgi. Ei puutu WC tellimust ennast.
+     *
+     * @param string $invoice_no Arve number (nt 'WP123').
+     * @return array Laravel-i proxy vastus.
+     */
+    public function delete_invoice( string $invoice_no ): array {
+        return $this->call_post( 'merit/invoice/delete', [ 'invoice_no' => $invoice_no ] );
+    }
 }

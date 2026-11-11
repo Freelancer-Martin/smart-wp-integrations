@@ -114,6 +114,44 @@ class SWI_Order_Metabox {
             </button>
             <?php endif; ?>
 
+            <?php
+            $merit_sent = $order->get_meta( '_swi_sent_merit' );
+            if ( $merit_sent && isset( $this->services['merit'] ) ) :
+                $payment_sent    = $order->get_meta( '_swi_merit_payment_sent' );
+                $has_open_refund = false;
+                foreach ( $order->get_refunds() as $refund ) {
+                    if ( ! $refund->get_meta( '_swi_merit_credit_sent' ) ) { $has_open_refund = true; break; }
+                }
+            ?>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;">
+                <div style="font-size:11px;color:#9ca3af;margin-bottom:4px;">Merit Aktiva</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <button id="swi-mb-merit-status-btn" class="button" style="height:26px;font-size:11px;"
+                            data-id="<?php echo esc_attr( $order_id ); ?>"
+                            data-nonce="<?php echo esc_attr( wp_create_nonce( 'swi_merit_invoice_status' ) ); ?>">
+                        Vaata Meriti staatust
+                    </button>
+                    <button id="swi-mb-merit-payment-btn" class="button" style="height:26px;font-size:11px;"
+                            data-id="<?php echo esc_attr( $order_id ); ?>"
+                            data-nonce="<?php echo esc_attr( wp_create_nonce( 'swi_merit_send_payment' ) ); ?>">
+                        <?php echo $payment_sent ? '✓ Makse saadetud (' . esc_html( date( 'd.m.y', strtotime( $payment_sent ) ) ) . ') — saada uuesti' : 'Märgi makstuks Meritis'; ?>
+                    </button>
+                    <?php if ( $has_open_refund ) : ?>
+                    <button id="swi-mb-merit-credit-btn" class="button" style="height:26px;font-size:11px;"
+                            data-id="<?php echo esc_attr( $order_id ); ?>"
+                            data-nonce="<?php echo esc_attr( wp_create_nonce( 'swi_merit_create_credit' ) ); ?>">
+                        Loo kreediitarve
+                    </button>
+                    <?php endif; ?>
+                    <button id="swi-mb-merit-delete-btn" class="button" style="height:26px;font-size:11px;color:#dc2626;"
+                            data-id="<?php echo esc_attr( $order_id ); ?>"
+                            data-nonce="<?php echo esc_attr( wp_create_nonce( 'swi_merit_delete_invoice' ) ); ?>">
+                        Kustuta Meriti arve
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div id="swi-mb-msg" style="margin-top:6px;font-size:12px;min-height:16px;"></div>
         </div>
         <?php
@@ -198,6 +236,96 @@ class SWI_Order_Metabox {
                     }
                 }).fail(function(xhr){
                     btn.prop('disabled', false).text('Laadi SA arve PDF');
+                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
+                });
+            });
+
+            $('#swi-mb-merit-status-btn').on('click', function(){
+                var btn = $(this), msg = $('#swi-mb-msg');
+                btn.prop('disabled', true);
+                msg.css('color','#6b7280').text('Küsin Meritist…');
+                $.post(ajaxurl, {
+                    action: 'swi_merit_invoice_status',
+                    nonce:  btn.data('nonce'),
+                    order_id: btn.data('id')
+                }, function(r){
+                    btn.prop('disabled', false);
+                    if (r.success) {
+                        var d = r.data;
+                        var status = d.paid ? '✓ Tasutud' : '– Tasumata';
+                        msg.css('color', d.paid ? '#16a34a' : '#6b7280')
+                           .text(status + ' | Summa: ' + d.total + ' (makstud: ' + (d.paidAmount ?? 0) + ')');
+                    } else {
+                        msg.css('color','#dc2626').text('✗ ' + ((r.data && r.data.message) || 'Viga'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false);
+                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
+                });
+            });
+
+            $('#swi-mb-merit-payment-btn').on('click', function(){
+                var btn = $(this), msg = $('#swi-mb-msg');
+                btn.prop('disabled', true).text('Saadan…');
+                $.post(ajaxurl, {
+                    action: 'swi_merit_send_payment',
+                    nonce:  btn.data('nonce'),
+                    order_id: btn.data('id')
+                }, function(r){
+                    btn.prop('disabled', false);
+                    if (r.success) {
+                        msg.css('color','#16a34a').text('✓ ' + r.data.message);
+                        btn.text('✓ Makse saadetud — saada uuesti');
+                    } else {
+                        btn.text('Märgi makstuks Meritis');
+                        msg.css('color','#dc2626').text('✗ ' + ((r.data && r.data.message) || 'Viga'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false).text('Märgi makstuks Meritis');
+                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
+                });
+            });
+
+            $('#swi-mb-merit-credit-btn').on('click', function(){
+                var btn = $(this), msg = $('#swi-mb-msg');
+                btn.prop('disabled', true).text('Loon…');
+                $.post(ajaxurl, {
+                    action: 'swi_merit_create_credit',
+                    nonce:  btn.data('nonce'),
+                    order_id: btn.data('id')
+                }, function(r){
+                    btn.prop('disabled', false).text('Loo kreediitarve');
+                    if (r.success) {
+                        msg.css('color','#16a34a').text('✓ ' + r.data.message);
+                        btn.prop('disabled', true);
+                    } else {
+                        msg.css('color','#dc2626').text('✗ ' + ((r.data && r.data.message) || 'Viga'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false).text('Loo kreediitarve');
+                    msg.css('color','#dc2626').text('✗ Ühenduse viga');
+                });
+            });
+
+            $('#swi-mb-merit-delete-btn').on('click', function(){
+                if (!window.confirm('Kustutada see arve päriselt Merit Aktivast? Seda ei saa tagasi võtta.')) {
+                    return;
+                }
+                var btn = $(this), msg = $('#swi-mb-msg');
+                btn.prop('disabled', true).text('Kustutan…');
+                $.post(ajaxurl, {
+                    action: 'swi_merit_delete_invoice',
+                    nonce:  btn.data('nonce'),
+                    order_id: btn.data('id')
+                }, function(r){
+                    btn.prop('disabled', false).text('Kustuta Meriti arve');
+                    if (r.success) {
+                        msg.css('color','#16a34a').text('✓ ' + r.data.message);
+                    } else {
+                        msg.css('color','#dc2626').text('✗ ' + ((r.data && r.data.message) || 'Viga'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false).text('Kustuta Meriti arve');
                     msg.css('color','#dc2626').text('✗ Ühenduse viga');
                 });
             });
