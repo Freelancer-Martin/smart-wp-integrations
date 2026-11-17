@@ -57,6 +57,14 @@ class Smart_Wp_Integrations_Admin {
     }
 
     public function my_plugin_enqueue_bootstrap() {
+        // Bootstrapi reboot kirjutab üle WP/WooCommerce'i admin stiilid (nt h4 pealkirjad
+        // tellimuse metaboxides) — lae ainult plugina enda seadete tabil, kus seda kasutatakse.
+        $page = isset( $_GET['page'] ) ? sanitize_key( $_GET['page'] ) : '';
+        $tab  = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : '';
+        if ( $page !== 'wc-settings' || $tab !== 'smart_wp_integration' ) {
+            return;
+        }
+
         wp_enqueue_style(
             'my-plugin-bootstrap-css',
             'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'
