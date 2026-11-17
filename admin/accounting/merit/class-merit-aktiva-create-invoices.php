@@ -300,6 +300,34 @@ class My_Simple_Ajax_Plugin {
         return $result;
     }
 
+    /**
+     * KM, mille Merit arveridade maksude järgi arvutaks: sum(rea neto × maksu %).
+     * Maksuprotsendid tulevad Meritist laaditud vahemälust; kui mõnda rea maksu seal pole
+     * (maksumäärasid pole laaditud), tagastab null ja kontroll jäetakse vahele.
+     *
+     * @return array|null ['total' => float, 'names' => string[]]
+     */
+    private function expected_merit_tax( array $rows ): ?array {
+        $pct = $names = [];
+        foreach ( (array) get_option( 'swi_merit_taxes_cache', [] ) as $t ) {
+            if ( ! empty( $t['Id'] ) ) {
+                $pct[ $t['Id'] ]   = (float) ( $t['TaxPct'] ?? 0 );
+                $names[ $t['Id'] ] = (string) ( $t['Name'] ?: $t['Code'] );
+            }
+        }
+        $total = 0.0;
+        $used  = [];
+        foreach ( $rows as $row ) {
+            $id = (string) ( $row['TaxId'] ?? '' );
+            if ( ! isset( $pct[ $id ] ) ) {
+                return null;
+            }
+            $total      += round( (float) $row['Price'] * (float) $row['Quantity'], 2 ) * $pct[ $id ] / 100;
+            $used[ $id ] = $names[ $id ];
+        }
+        return [ 'total' => round( $total, 2 ), 'names' => array_values( $used ) ];
+    }
+
     /** Ridade neto summa nii, nagu Merit seda arvutab (iga rida ümardatud 2 kohta). */
     private static function rows_net_total( array $rows ): float {
         $sum = 0.0;
@@ -698,6 +726,19 @@ class My_Simple_Ajax_Plugin {
                 number_format( $total_amount - $rounding_amount, 2, ',', '' ),
                 number_format( $total_amount, 2, ',', '' ),
                 number_format( $rounding_amount, 2, ',', '' )
+            ) );
+        }
+
+        // Merit arvutab KM-i ise arverea maksu (TaxId) järgi, meie saadetud summast sõltumata. Kui valitud
+        // maks annaks teise KM-i kui tellimusel (nt pood maksudeta, aga maks 13%), tuleks Meritis arve
+        // teise summaga kui klient maksis — sellist arvet ei saada.
+        $merit_tax = $this->expected_merit_tax( $rows );
+        if ( $merit_tax !== null && abs( $merit_tax['total'] - $order_total_tax ) > self::MAX_ROUNDING ) {
+            return $this->fail_build( $order, sprintf(
+                'Tellimusel on KM %s €, aga Meriti maks (%s) annaks arvele KM %s € — arve summa ei klapiks tellimusega. Kontrolli WooCommerce\'i maksuseadeid ja plugina Maksude kaardistust (või "Maks KM-ita ridadele").',
+                number_format( $order_total_tax, 2, ',', '' ),
+                implode( ', ', $merit_tax['names'] ),
+                number_format( $merit_tax['total'], 2, ',', '' )
             ) );
         }
 

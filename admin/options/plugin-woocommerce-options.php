@@ -162,7 +162,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                     --swi-light:      #f9fafb;
                     --swi-sidebar-w:  260px;
                 }
+                /* Ruum WP jalusele ("If you like WooCommerce…", versioon) — jalus on absoluutse positsiooniga lehe all */
                 #wpbody-content { padding-bottom: 0 !important; }
+                #wpcontent { padding-bottom: var(--swi-footer-h, 65px) !important; }
                 .woocommerce-page #wpbody .wrap { margin: 0 !important; padding: 0 !important; }
 
                 .swi-frame {
@@ -264,7 +266,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 .swi-nav-icon { font-size: 15px; width: 22px; text-align: center; flex-shrink: 0; }
 
                 /* ── CONTENT ── */
-                .swi-content { flex:1; overflow-y:auto; padding:28px 32px; }
+                .swi-content { flex:1; overflow-y:auto; padding:28px 32px 48px; }
 
                 /* Tab views */
                 .swi-tabview { display:none; height:100%; }
@@ -2859,6 +2861,23 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 t.classList.toggle('on', on);
                 l.textContent = on ? 'Lubatud' : 'Keelatud';
             }
+
+            // Raami kõrgus = aknast allesjäänud ala miinus WP jalus (üleval on WP admin riba + WooCommerce'i
+            // päis, mida fikseeritud 100vh - 32px ei arvesta — raam ulatus jaluse alla)
+            (function() {
+                function swiFitFrame() {
+                    var f = document.querySelector('.swi-frame');
+                    if (!f) return;
+                    var footer  = document.getElementById('wpfooter');
+                    var footerH = footer ? footer.offsetHeight : 0;
+                    document.documentElement.style.setProperty('--swi-footer-h', footerH + 'px');
+                    var top = f.getBoundingClientRect().top + window.scrollY;
+                    f.style.height = Math.max(400, window.innerHeight - top - footerH) + 'px';
+                }
+                document.addEventListener('DOMContentLoaded', swiFitFrame);
+                window.addEventListener('load', swiFitFrame);
+                window.addEventListener('resize', swiFitFrame);
+            })();
 
             // Meriti makseviiside laadimine ja laoseisu sünkroonimine (sama muster mis ladudel)
             document.addEventListener('DOMContentLoaded', function() {
