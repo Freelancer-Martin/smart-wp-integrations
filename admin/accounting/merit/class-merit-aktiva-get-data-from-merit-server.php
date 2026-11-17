@@ -137,7 +137,60 @@ class MeritServersDataClient {
      */
     public function get_vatcodes(): array {
         $data = $this->call( 'merit/vatcodes' );
-        return $data['vatcodes'] ?? [];
+        $list = $data['vatcodes'] ?? [];
+
+        // Vahemälu valikute jaoks (vaikimisi/transpordi/0%/EL maks): ainult aktiivsed maksud, Id = TaxId
+        $cache = [];
+        foreach ( (array) $list as $t ) {
+            if ( empty( $t['Id'] ) || ! empty( $t['NonActive'] ) ) continue;
+            $cache[] = [
+                'Id'          => sanitize_text_field( (string) $t['Id'] ),
+                'Code'        => sanitize_text_field( (string) ( $t['Code'] ?? '' ) ),
+                'Name'        => sanitize_text_field( (string) ( $t['Name'] ?? '' ) ),
+                'TaxPct'      => (float) ( $t['TaxPct'] ?? 0 ),
+                'CountryCode' => sanitize_text_field( (string) ( $t['CountryCode'] ?? '' ) ),
+            ];
+        }
+        if ( $cache ) {
+            update_option( 'swi_merit_taxes_cache', $cache, false );
+        }
+        return $list;
+    }
+
+    /**
+     * Meriti müügi makseviisid; salvestab vahemällu 'swi_merit_payment_types_cache' (makseviisi kaardistuse valikud).
+     *
+     * @return array [['Id' => guid, 'Name' => 'Swedbank', ...], ...]
+     */
+    public function get_payment_types(): array {
+        $data  = $this->call( 'merit/payment-types' );
+        $types = [];
+        foreach ( (array) ( $data['payment_types'] ?? [] ) as $t ) {
+            if ( empty( $t['Name'] ) ) continue;
+            $types[] = [
+                'Id'   => sanitize_text_field( (string) ( $t['Id'] ?? '' ) ),
+                'Name' => sanitize_text_field( (string) $t['Name'] ),
+            ];
+        }
+        update_option( 'swi_merit_payment_types_cache', $types, false );
+        return $types;
+    }
+
+    /**
+     * Meriti arve PDF arve numbri järgi.
+     *
+     * @return array ['file_name' => string, 'file_content' => base64]
+     */
+    public function get_invoice_pdf( string $invoice_no ): array {
+        return $this->call( 'merit/invoice/pdf?invoice_no=' . rawurlencode( $invoice_no ) );
+    }
+
+    /**
+     * Laoseis ühes laos kujul [ 'ItemCode' => kogus ]. Tühi $location = Meriti vaikimisi ladu.
+     */
+    public function get_stock( string $location = '' ): array {
+        $data = $this->call( 'merit/stock' . ( $location !== '' ? '?location=' . rawurlencode( $location ) : '' ) );
+        return (array) ( $data['stock'] ?? [] );
     }
 
     /**

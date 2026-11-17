@@ -70,14 +70,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'smart_wp_integtaion_arve_eesliides', 'default' => 'WP' ],
                 [ 'name' => 'Maksetähtaeg (päevades)',    'type' => 'text',     'id' => 'smart_wp_integtaion_maksetahtaeg',   'default' => '14' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'smart_wp_integtaion_invoice_status', 'options' => $s, 'default' => 'wc-completed' ],
-                [ 'name' => 'Käibemaksumäär', 'type' => 'select', 'id' => 'smart_wp_integtaion_maksumaar', 'options' => [
-                    '973a4395-665f-47a6-a5b6-5384dd24f8d0' => '0%',
-                    '6b618baa-680b-4606-9ad9-eff0beb27344' => '9%',
-                    'fd050f9b-f376-40fb-aee5-af2d1f04970f' => '13%',
-                    'b9b25735-6a15-4d4e-8720-25b254ae3d21' => '20%',
-                    '307000b4-f1f2-4bc7-a110-24cb18d77212' => '22%',
-                    '1e420e04-3dd7-46a5-b71f-0490779c2638' => '24%',
-                ], 'default' => '1e420e04-3dd7-46a5-b71f-0490779c2638' ],
+                [ 'name' => 'Vaikimisi käibemaksumäär', 'type' => 'select', 'id' => 'smart_wp_integtaion_maksumaar', 'options' => $this->merit_tax_options( (string) get_option( 'smart_wp_integtaion_maksumaar', '' ) ),
+                  'default' => '1e420e04-3dd7-46a5-b71f-0490779c2638',
+                  'desc' => 'Kasutatakse, kui rea määra ei leita Maksude kaardistusest ega seal pole vaikimisi rida. Valikud tulevad Meritist (Maksud → Lae Merit maksumäärad).' ],
                 [ 'name' => 'Arve ridade tüüp', 'type' => 'select', 'id' => 'smart_wp_integtaion_arve_ridade_tyyp', 'options' => [1=>'LaoKaup',2=>'Teenus',3=>'Kaup'], 'default' => 1 ],
                 [ 'type' => 'sectionend', 'id' => 'swi_merit' ],
             ];
@@ -472,6 +467,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 // Feature 4: E-mail teavitus toggle
                                 $email_notify_on = get_option('swi_merit_email_notify') === 'yes';
                                 $this->render_toggle('swi_merit_email_notify', 'E-mail teavitus ebaõnnestumisel', $email_notify_on);
+                                $this->render_toggle('swi_merit_pdf_email', 'Arve PDF täidetud tellimuse e-kirjale', get_option('swi_merit_pdf_email') === 'yes');
                                 ?>
                                 <?php woocommerce_admin_fields($merit_s); ?>
                             </div>
@@ -498,8 +494,14 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-payments">
                             <div class="swi-section-title">Merit Aktiva – Maksemeetodite kaardistus</div>
-                            <div class="swi-section-desc">Seo WooCommerce maksemeetodid Merit Aktiva pearaamatu kontodega.</div>
-                            <div class="swi-card"><?php $this->field_payment_map(['id'=>$this->opt_payment_map]); ?></div>
+                            <div class="swi-section-desc">Seo WooCommerce maksemeetod Meriti makseviisiga — makstud tellimuse arve luuakse Meritis kohe tasutuna. Jäta tühjaks, kui makset ei registreerita (nt pangalink, mille Merit loeb ise pangast).</div>
+                            <div class="swi-card">
+                                <p style="margin:0 0 12px;">
+                                    <button type="button" id="swi-load-paytypes-btn" class="button button-secondary">Lae Meriti makseviisid</button>
+                                    <span id="swi-paytypes-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
+                                </p>
+                                <?php $this->field_payment_map(['id'=>$this->opt_payment_map]); ?>
+                            </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-taxes">
                             <div class="swi-section-title">Merit Aktiva – Maksude kaardistus</div>
@@ -511,6 +513,31 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 </p>
                                 <?php $this->field_tax_map(['id'=>$this->opt_tax_map]); ?>
                             </div>
+                            <?php
+                            $tax_zero_saved = (string) get_option('swi_merit_tax_zero', '');
+                            $tax_eu_saved   = (string) get_option('swi_merit_tax_eu_reverse', '');
+                            $tax_special    = [
+                                ['swi_merit_tax_zero', $tax_zero_saved, 'Maks KM-ita ridadele (0%)', 'Kui real pole käibemaksu (nt eksport väljapoole EL-i) ja 0% määra pole kaardistuses.'],
+                                ['swi_merit_tax_eu_reverse', $tax_eu_saved, 'EL ettevõte KMKR-iga', 'Teise EL riigi KMKR-iga ettevõtte KM-ita tellimus (pöördmaksustamine) — kõik read selle maksuga.'],
+                            ];
+                            ?>
+                            <div class="swi-card">
+                                <table class="form-table" style="margin-bottom:0;">
+                                    <?php foreach ($tax_special as [$t_name, $t_val, $t_label, $t_desc]) : ?>
+                                    <tr>
+                                        <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;"><?php echo esc_html($t_label); ?></th>
+                                        <td style="padding:8px 0;">
+                                            <select name="<?php echo esc_attr($t_name); ?>" style="min-width:300px;">
+                                                <?php foreach ($this->merit_tax_options($t_val, ['' => '— ei kasutata —']) as $vid => $vlabel) : ?>
+                                                <option value="<?php echo esc_attr($vid); ?>" <?php selected($t_val, (string) $vid); ?>><?php echo esc_html($vlabel); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <p style="margin:4px 0 0;font-size:11px;color:#6b7280;"><?php echo esc_html($t_desc); ?></p>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </table>
+                            </div>
                         </div>
                         <div class="swi-panel" id="swi-panel-merit-shipping">
                             <div class="swi-section-title">Merit Aktiva – Tarnemeetodite kaardistus</div>
@@ -519,20 +546,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <?php
                             // Transpordiridade eraldi maksutüüp (nt SmartPost, Omniva, kuller)
                             $ship_vat_saved = get_option('swi_merit_shipping_maksumaar', '');
-                            $ship_vat_opts  = [
-                                '973a4395-665f-47a6-a5b6-5384dd24f8d0' => '0%',
-                                '6b618baa-680b-4606-9ad9-eff0beb27344' => '9%',
-                                'fd050f9b-f376-40fb-aee5-af2d1f04970f' => '13%',
-                                'b9b25735-6a15-4d4e-8720-25b254ae3d21' => '20%',
-                                '307000b4-f1f2-4bc7-a110-24cb18d77212' => '22%',
-                                '1e420e04-3dd7-46a5-b71f-0490779c2638' => '24%',
-                            ];
-                            foreach ((array) get_option($this->opt_tax_map, []) as $tm) {
-                                if (!empty($tm['uuid']) && !isset($ship_vat_opts[$tm['uuid']])) {
-                                    $ship_vat_opts[$tm['uuid']] = ($tm['rate'] ?? '') . '% (' . $tm['uuid'] . ')';
-                                }
-                            }
-                            if ($ship_vat_saved && !isset($ship_vat_opts[$ship_vat_saved])) $ship_vat_opts[$ship_vat_saved] = $ship_vat_saved;
+                            $ship_vat_opts  = $this->merit_tax_options((string) $ship_vat_saved);
                             ?>
                             <div class="swi-card">
                                 <table class="form-table" style="margin-bottom:0;">
@@ -696,6 +710,17 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                         </td>
                                     </tr>
                                 </table>
+                            </div>
+                            <div class="swi-card">
+                                <?php $this->render_toggle('swi_merit_stock_sync', 'Laoseisu sünkroonimine Meritist', get_option('swi_merit_stock_sync') === 'yes'); ?>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Iga tunni järel uuendatakse laoarvestusega toodete laoseis Meriti laoseisu järgi (toote SKU = Meriti kaubakood, ladu nagu arveridadel).</p>
+                                <p style="margin:0;">
+                                    <button type="button" id="swi-sync-stock-btn" class="button button-secondary">Sünkroniseeri laoseis kohe</button>
+                                    <span id="swi-stock-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
+                                    <?php $last_stock = get_option('swi_merit_stock_last_sync', ''); if ($last_stock) : ?>
+                                    <span style="margin-left:8px;font-size:12px;color:#6b7280;">Viimati: <?php echo esc_html($last_stock); ?></span>
+                                    <?php endif; ?>
+                                </p>
                             </div>
                             <div class="swi-card">
                                 <p style="margin:0 0 12px;font-weight:600;font-size:12.5px;">Kategooria → Ladu kaardistus</p>
@@ -2835,6 +2860,39 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 l.textContent = on ? 'Lubatud' : 'Keelatud';
             }
 
+            // Meriti makseviiside laadimine ja laoseisu sünkroonimine (sama muster mis ladudel)
+            document.addEventListener('DOMContentLoaded', function() {
+                function swiAjaxBtn(btnId, spinnerId, action, onOk) {
+                    var btn = document.getElementById(btnId);
+                    if (!btn) return;
+                    btn.addEventListener('click', function() {
+                        var spinner = document.getElementById(spinnerId);
+                        btn.disabled = true;
+                        if (spinner) spinner.style.display = 'inline';
+                        jQuery.post(ajaxurl, { action: action, security: MyAjax.nonce }, function(resp) {
+                            btn.disabled = false;
+                            if (spinner) spinner.style.display = 'none';
+                            if (!resp.success) {
+                                swiNotify((resp.data && resp.data.error) ? resp.data.error : 'Päring ebaõnnestus', 'error');
+                                return;
+                            }
+                            onOk(resp.data);
+                        }).fail(function() {
+                            btn.disabled = false;
+                            if (spinner) spinner.style.display = 'none';
+                            swiNotify('Serveri viga', 'error');
+                        });
+                    });
+                }
+                swiAjaxBtn('swi-load-paytypes-btn', 'swi-paytypes-spinner', 'swi_merit_load_payment_types', function(d) {
+                    swiNotify(d.payment_types.length + ' makseviisi laaditud.', 'ok');
+                    setTimeout(function() { window.location.reload(); }, 800);
+                });
+                swiAjaxBtn('swi-sync-stock-btn', 'swi-stock-spinner', 'swi_merit_sync_stock', function(d) {
+                    swiNotify('Laoseis: kontrollitud ' + d.checked + ', uuendatud ' + d.updated + '.', 'ok');
+                });
+            });
+
             // Meriti ladude laadimine — valikud joonistatakse vahemälust, seega laadime lehe uuesti
             document.addEventListener('DOMContentLoaded', function() {
                 var locBtn = document.getElementById('swi-load-locations-btn');
@@ -2887,11 +2945,26 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             var taxKey = '<?php echo esc_js($this->opt_tax_map); ?>';
                             var tbody = document.querySelector('#swi-panel-merit-taxes table.widefat tbody');
                             if (!tbody) { swiNotify('Maksude tabelit ei leitud.', 'error'); return; }
+                            // Eemalda vigased read (varasem laadimine pani UUID asemele maksu koodi, nt "24%")
+                            var guidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                            var haveRates = {};
+                            tbody.querySelectorAll('tr').forEach(function(tr) {
+                                var u = tr.querySelector('input[name$="[uuid]"]');
+                                var r = tr.querySelector('input[name$="[rate]"]');
+                                if (!u || !u.value) return;
+                                if (!guidRe.test(u.value)) { tr.remove(); return; }
+                                if (r && r.value !== '') haveRates[parseFloat(r.value)] = true;
+                            });
+                            // Üks rida määra kohta: ainult kohalikud aktiivsed maksud, eelistades standardkoodi ("24%")
+                            var added = 0;
+                            vatcodes = vatcodes.filter(function(vc) { return vc.Id && !vc.NonActive && !vc.CountryId; })
+                                .sort(function(a, b) { return (b.Code === b.TaxPct + '%') - (a.Code === a.TaxPct + '%'); });
                             vatcodes.forEach(function(vc) {
-                                if (!vc.Code && !vc.Rate) return;
+                                var rate = parseFloat(vc.TaxPct);
+                                if (isNaN(rate) || haveRates[rate]) return;
+                                haveRates[rate] = true; added++;
                                 var uid = 'vat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                                var rate = vc.Rate !== undefined ? vc.Rate : '';
-                                var uuid = vc.Code || '';
+                                var uuid = vc.Id;
                                 var tr = document.createElement('tr');
                                 tr.innerHTML =
                                     '<td><input type="number" name="'+taxKey+'['+uid+'][rate]" value="'+rate+'" style="width:70px" min="0" max="100"></td>'
@@ -2900,7 +2973,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     + '<td><button type="button" onclick="this.closest(\'tr\').remove()" style="background:none;border:none;cursor:pointer;color:#b32d2e;font-size:16px" title="Kustuta">✕</button></td>';
                                 tbody.appendChild(tr);
                             });
-                            swiNotify(vatcodes.length + ' VAT koodi lisatud tabelisse.', 'ok');
+                            swiNotify(added + ' maksumäära lisatud tabelisse. Märgi üks vaikimisi ja salvesta seaded.', 'ok');
                         }).fail(function() {
                             vatBtn.disabled = false;
                             if (spinner) spinner.style.display = 'none';
@@ -3425,6 +3498,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'smart_wp_integtaion_deparment',
                 'swi_merit_location_code',
                 'swi_merit_shipping_maksumaar',
+                'swi_merit_tax_zero',
+                'swi_merit_tax_eu_reverse',
                 'swi_simplebooks_order_status',
                 'swi_smartaccounts_order_status',
                 'swi_erply_order_status',
@@ -3450,6 +3525,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_iec_enable',
                 'swi_omniva_enable',
                 'swi_merit_email_notify',
+                'swi_merit_pdf_email',
+                'swi_merit_stock_sync',
             ] as $field ) {
                 $val = sanitize_text_field( wp_unslash( $_POST[ $field ] ?? 'no' ) );
                 update_option( $field, $val === 'yes' ? 'yes' : 'no' );
@@ -3556,12 +3633,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'swi_smartpost_mobile_classic',
                 'swi_smartpost_prices',
                 'smart_wp_integration_server_url',
-                'regno',
                 'swi_merit_email_notify',
                 'swi_category_dept_map',
                 'swi_merit_location_code',
                 'swi_merit_shipping_maksumaar',
                 'swi_category_location_map',
+                'swi_merit_tax_zero',
+                'swi_merit_tax_eu_reverse',
+                'swi_merit_pdf_email',
+                'swi_merit_stock_sync',
             ];
         }
 
@@ -3601,6 +3681,34 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 }
             }
             wp_send_json_success( [ 'message' => 'Seaded imporditud.' ] );
+        }
+
+        /**
+         * Meriti maksude valikud [TaxId => silt] Meritist laaditud vahemälust. Kui maksumäärasid pole
+         * veel laaditud, näidatakse Meriti standardmaksude ID-sid, et olemasolev seadistus ei kaoks.
+         */
+        private function merit_tax_options( string $current = '', array $prepend = [] ): array {
+            $opts = $prepend;
+            foreach ( (array) get_option( 'swi_merit_taxes_cache', [] ) as $t ) {
+                if ( empty( $t['Id'] ) ) continue;
+                $label = $t['Name'] !== '' ? $t['Name'] : $t['Code'];
+                if ( ! empty( $t['CountryCode'] ) ) $label .= ' (' . $t['CountryCode'] . ')';
+                $opts[ $t['Id'] ] = $label;
+            }
+            if ( count( $opts ) === count( $prepend ) ) {
+                $opts += [
+                    '973a4395-665f-47a6-a5b6-5384dd24f8d0' => '0%',
+                    '6b618baa-680b-4606-9ad9-eff0beb27344' => '9%',
+                    'fd050f9b-f376-40fb-aee5-af2d1f04970f' => '13%',
+                    'b9b25735-6a15-4d4e-8720-25b254ae3d21' => '20%',
+                    '307000b4-f1f2-4bc7-a110-24cb18d77212' => '22%',
+                    '1e420e04-3dd7-46a5-b71f-0490779c2638' => '24%',
+                ];
+            }
+            if ( $current !== '' && ! isset( $opts[ $current ] ) ) {
+                $opts[ $current ] = $current;
+            }
+            return $opts;
         }
 
         private function render_toggle( string $name, string $label, bool $on ): void {
@@ -3664,11 +3772,19 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 foreach ((array)WC()->payment_gateways()->get_available_payment_gateways() as $id => $g) $methods[$id] = $g->get_title();
             foreach (['bacs'=>'Pangaülekanne','cheque'=>'Tšekk','cod'=>'Sularaha','montonio_bank'=>'Montonio – pank','card_payment'=>'Kaardimakse'] as $k=>$v)
                 if (!isset($methods[$k])) $methods[$k] = $v;
-            echo '<table class="widefat" style="margin:0;"><thead><tr><th>Maksemeetod</th><th>Merit konto/kood</th></tr></thead><tbody>';
-            foreach ($methods as $id=>$title)
-                printf('<tr><td>%s <code style="opacity:.6;font-size:.85em">(%s)</code></td><td><input type="text" name="%s[%s]" value="%s" placeholder="nt 1000"></td></tr>',
-                    esc_html($title),esc_html($id),esc_attr($key),esc_attr($id),esc_attr($stored[$id]??''));
+            $types = array_column((array) get_option('swi_merit_payment_types_cache', []), 'Name');
+            echo '<table class="widefat" style="margin:0;"><thead><tr><th>Maksemeetod</th><th>Meriti makseviis</th></tr></thead><tbody>';
+            foreach ($methods as $id=>$title) {
+                $cur = (string) ($stored[$id] ?? '');
+                printf('<tr><td>%s <code style="opacity:.6;font-size:.85em">(%s)</code></td><td><select name="%s[%s]" style="min-width:260px;">',
+                    esc_html($title),esc_html($id),esc_attr($key),esc_attr($id));
+                echo '<option value="">— ära märgi makstuks —</option>';
+                foreach ($types as $tname) printf('<option value="%s" %s>%s</option>', esc_attr($tname), selected($cur, $tname, false), esc_html($tname));
+                if ($cur !== '' && !in_array($cur, $types, true)) printf('<option value="%s" selected>%s</option>', esc_attr($cur), esc_html($cur . ' — Meritist ei leitud'));
+                echo '</select></td></tr>';
+            }
             echo '</tbody></table>';
+            if (!$types) echo '<p style="margin:8px 0 0;font-size:11px;color:#6b7280;">Makseviise pole veel laaditud — vajuta "Lae Meriti makseviisid".</p>';
         }
 
         public function field_tax_map( $value ) {

@@ -24,9 +24,6 @@ class My_Simple_Ajax_Plugin {
     /** @var int Maksetähtaeg päevades (nt 14) */
     private $payment_deadline;
 
-    /** @var string Ettevõtte registreerimisnumber (lisatakse ärikliendi andmetele) */
-    private $regNo;
-
     /** @var string Arve numbri eesliide, nt 'WC' → arve number 'WC1234' */
     private $arve_eesliides;
 
@@ -47,13 +44,6 @@ class My_Simple_Ajax_Plugin {
 
     /** @var string Merit Aktiva osakonna kood (DepartmentCode) */
     private $department_code;
-
-    /**
-     * Merit AccountingDoc tüüp (1 = müügiarve, 2 = kreeditarve jne).
-     *
-     * @var int
-     */
-    private $AccountingDoc;
 
     /**
      * Registreerib kõik vajalikud WordPressi ja WooCommerce hookid ning laeb seaded.
@@ -94,6 +84,30 @@ class My_Simple_Ajax_Plugin {
         add_action( 'woocommerce_product_options_inventory_product_data', [ $this, 'render_product_location_field' ] );
         add_action( 'woocommerce_admin_process_product_object', [ $this, 'save_product_location_field' ] );
 
+        // Meriti makseviisid (Maksete kaardistuse valikud)
+        add_action( 'wp_ajax_swi_merit_load_payment_types', [ $this, 'handle_load_payment_types' ] );
+
+        // Arve PDF tellimuse "täidetud" e-kirjale (seade: Üldseaded → Arve PDF e-kirjale)
+        add_filter( 'woocommerce_email_attachments', [ $this, 'attach_merit_pdf' ], 10, 4 );
+
+        // Massiline saatmine tellimuste nimekirjast (vana + HPOS)
+        add_filter( 'bulk_actions-edit-shop_order', [ $this, 'add_bulk_action' ] );
+        add_filter( 'bulk_actions-woocommerce_page_wc-orders', [ $this, 'add_bulk_action' ] );
+        add_filter( 'handle_bulk_actions-edit-shop_order', [ $this, 'handle_bulk_action' ], 10, 3 );
+        add_filter( 'handle_bulk_actions-woocommerce_page_wc-orders', [ $this, 'handle_bulk_action' ], 10, 3 );
+        add_action( 'admin_notices', [ $this, 'show_bulk_action_notice' ] );
+
+        // Laoseisu sünkroonimine Meritist (seade: Laod → Laoseisu sünkroonimine), iga tund
+        add_action( 'wp_ajax_swi_merit_sync_stock', [ $this, 'handle_sync_stock' ] );
+        add_action( 'swi_merit_stock_cron', [ $this, 'sync_stock_from_merit' ] );
+        $stock_on = get_option( 'swi_merit_stock_sync' ) === 'yes';
+        $next     = wp_next_scheduled( 'swi_merit_stock_cron' );
+        if ( $stock_on && ! $next ) {
+            wp_schedule_event( time() + 300, 'hourly', 'swi_merit_stock_cron' );
+        } elseif ( ! $stock_on && $next ) {
+            wp_unschedule_event( $next, 'swi_merit_stock_cron' );
+        }
+
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
 
@@ -107,12 +121,10 @@ class My_Simple_Ajax_Plugin {
         // Kõik seaded loetakse üks kord konstruktoris, mitte iga meetodi kutsumise ajal
         $this->tax_field        = get_option( 'smart_wp_integtaion_maksumaar' );
         $this->payment_deadline = get_option( 'smart_wp_integtaion_maksetahtaeg' );
-        $this->regNo            = get_option( 'regno' );
         $this->arve_eesliides   = get_option( 'smart_wp_integtaion_arve_eesliides' );
         $this->order_Status     = get_option( 'smart_wp_integtaion_invoice_status' );
         $this->arve_ridade_tyyp = get_option( 'smart_wp_integtaion_arve_ridade_tyyp' );
         $this->department_code  = get_option( 'smart_wp_integtaion_deparment' );
-        $this->AccountingDoc    = get_option( 'smart_wp_integtaion_AccountingDoc' );
         // Vaikeladu: seadistamata = "1" (varasem käitumine), tühi = ladu ei saadeta
         $this->location_code      = (string) get_option( 'swi_merit_location_code', '1' );
         $this->shipping_tax_field = (string) get_option( 'swi_merit_shipping_maksumaar', '' );
@@ -223,7 +235,9 @@ class My_Simple_Ajax_Plugin {
      * mitme lao korral uue kauba loomisel). Teenus (2) / kaup (3): ladu ei saadeta.
      */
     private function apply_item_type_and_location( array $row ): array {
-        $type = (int) $this->arve_ridade_tyyp ?: 1;
+        // Transport, tasud ja summaga tagastus on alati teenus: neil pole laoseisu ega omahinda
+        $type = ! empty( $row['_service'] ) ? 2 : ( (int) $this->arve_ridade_tyyp ?: 1 );
+        unset( $row['_service'] );
         $row['Item']['Type'] = $type;
         $location = isset( $row['LocationCode'] ) ? (string) $row['LocationCode'] : '';
         if ( $type === 1 && $location !== '' ) {
@@ -232,7 +246,32 @@ class My_Simple_Ajax_Plugin {
         } else {
             unset( $row['LocationCode'], $row['Item']['DefLocationCode'] );
         }
+        if ( $type !== 1 ) {
+            unset( $row['ItemCostAmount'] );
+        }
         return $row;
+    }
+
+    /**
+     * Kreeditarve rea omahind (ItemCostAmount, positiivne summa). Allikad: WooCommerce'i omahind
+     * (COGS), levinud omahinna pluginate väljad, muidu müügihind. Filter võimaldab muuta.
+     */
+    private function credit_row_cost_amount( $item, $product, float $unit_price, float $qty ): float {
+        $unit_cost = 0.0;
+        if ( $product ) {
+            if ( method_exists( $product, 'get_cogs_value' ) ) {
+                $unit_cost = (float) $product->get_cogs_value();
+            }
+            foreach ( [ '_wc_cog_cost', '_alg_wc_cog_cost', '_purchase_price' ] as $meta_key ) {
+                if ( $unit_cost > 0 ) break;
+                $unit_cost = (float) $product->get_meta( $meta_key );
+            }
+        }
+        if ( $unit_cost <= 0 ) {
+            $unit_cost = abs( $unit_price );
+        }
+        $amount = round( abs( $qty ) * $unit_cost, 2 );
+        return (float) apply_filters( 'swi_merit_credit_row_cost_price', $amount, $item, $product );
     }
 
     /**
@@ -556,7 +595,6 @@ class My_Simple_Ajax_Plugin {
 
     public function build_payload_for_order( \WC_Order $order ): ?array {
         $country_settings = get_option( 'smart_wp_integtaion_country_map', [] );
-        $payment_map      = get_option( 'smart_wp_integtaion_payment_map', [] );
 
         // Riigi tuvastamine: eelistame arveaadressi, fallback tarneaadressile
         $country = $order->get_billing_country() ?: $order->get_shipping_country();
@@ -567,24 +605,19 @@ class My_Simple_Ajax_Plugin {
             }
         }
 
-        $vat_code = $this->tax_field;
-        $vat_name = null;
-        $is_default_country = false;
-        // Otsi riigipõhine VAT UUID seadistest — võimaldab eri riikidele eri maksumäära
+        // Maksutüüp ridadele: vaikimisi leitakse iga rea KM määra järgi Maksude kaardistusest.
+        // Riigi seadistus (nt OSS) sunnib kõik read ühe maksu alla ainult mitte-vaikimisi riigil.
+        $vat_code = null;
         if ( ! empty( $country ) && ! empty( $country_settings ) ) {
             foreach ( $country_settings as $row ) {
                 if ( ( $row['country'] ?? '' ) === $country ) {
-                    $vat_code           = ! empty( $row['vat_code'] ) ? $row['vat_code'] : $vat_code;
-                    $vat_name           = $row['name'] ?? null;
-                    $is_default_country = ! empty( $row['default'] );
+                    if ( empty( $row['default'] ) && self::is_guid( $row['vat_code'] ?? '' ) ) {
+                        $vat_code = $row['vat_code'];
+                    }
                     break;
                 }
             }
         }
-
-        // Maksemeetodi kaardistus WooCommerce payment_method → Merit konto kood
-        $wc_method     = $order->get_payment_method();
-        $merit_account = $payment_map[ $wc_method ] ?? null;
         $this->last_error = '';
 
         // Ettevõte: ettevõtte nimi või registrikood tellimusel (checkout väljad _billing_reg_no / _billing_vat_no)
@@ -592,6 +625,16 @@ class My_Simple_Ajax_Plugin {
         $reg_no       = self::order_field( $order, 'reg_no' );
         $vat_no       = self::order_field( $order, 'vat_no' );
         $is_company   = $company_name !== '' || $reg_no !== '';
+
+        // EL-i KMKR-iga ettevõte teisest liikmesriigist, KM-ita tellimus → pöördmaksustamise maks
+        $eu_reverse_tax = (string) get_option( 'swi_merit_tax_eu_reverse', '' );
+        if ( $is_company && $vat_no !== '' && self::is_guid( $eu_reverse_tax ) && (float) $order->get_total_tax() == 0.0 ) {
+            $eu       = WC()->countries ? WC()->countries->get_european_union_countries() : [];
+            $base_cc  = WC()->countries ? WC()->countries->get_base_country() : 'EE';
+            if ( $country && $country !== $base_cc && in_array( $country, $eu, true ) ) {
+                $vat_code = $eu_reverse_tax;
+            }
+        }
         $person_name  = self::clean_name( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 
         // NotTDCustomer = true tähendab eraisik (ei ole käibemaksukohustuslane)
@@ -660,7 +703,7 @@ class My_Simple_Ajax_Plugin {
 
         // Merit nõuab TaxAmount massiivi, kus iga maksu UUID kohta on eraldi KM summa
         // (ühel arvel võib olla mitu määra, nt tooted 24% + transport teise määraga).
-        $tax_amount_arr = $this->build_tax_amounts( $rows, $vat_code ?: (string) $this->tax_field, $order_total_tax );
+        $tax_amount_arr = $this->build_tax_amounts( $rows, $vat_code ?: $this->default_tax_id(), $order_total_tax );
 
         if ( $order->get_meta( '_swi_merit_build_error' ) && ! $this->dry_run ) {
             $order->delete_meta_data( '_swi_merit_build_error' );
@@ -671,7 +714,7 @@ class My_Simple_Ajax_Plugin {
         $doc_date = $order->get_date_created()
             ? $order->get_date_created()->date( 'Ymd' )
             : gmdate( 'Ymd' );
-        $due_date = gmdate( 'Ymd', strtotime( '+' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
+        $due_date = gmdate( 'Ymd', strtotime( $doc_date . ' +' . max( 1, (int) $this->payment_deadline ) . ' days' ) );
 
         // Kategooria → osakond kaardistus: esimene leitud kategooria osakond võidab
         $dept_map  = (array) get_option( 'swi_category_dept_map', [] );
@@ -708,9 +751,10 @@ class My_Simple_Ajax_Plugin {
             'TaxAmount'      => $tax_amount_arr,
         ];
 
-        // PaymentMethod lisatakse ainult kui kaardistus seadistatud — muidu Merit kasutab vaikimisi
-        if ( ! empty( $merit_account ) ) {
-            $payload['PaymentMethod'] = $merit_account;
+        // Makstud tellimus → arve luuakse Meritis kohe tasutuna (makseviis valitud Maksete kaardistuses)
+        $payment = $this->payment_object_for_order( $order );
+        if ( $payment ) {
+            $payload['Payment'] = $payment;
         }
 
         return $payload;
@@ -734,7 +778,7 @@ class My_Simple_Ajax_Plugin {
             return null;
         }
 
-        $main_tax_id = (string) $this->tax_field;
+        $main_tax_id = $this->default_tax_id();
         $rows        = $this->create_invoice_items_array( $refund );
 
         if ( empty( $rows ) ) {
@@ -762,6 +806,7 @@ class My_Simple_Ajax_Plugin {
                 'TaxId'          => $main_tax_id,
                 'LocationCode'   => $this->location_code,
                 self::ROW_TAX_KEY => -round( $gross - $net, 2 ),
+                '_service'       => true,
             ] ) ];
             $total_tax = -round( $gross - $net, 2 );
         } else {
@@ -783,6 +828,8 @@ class My_Simple_Ajax_Plugin {
         $base['TotalAmount']    = $total_amount;
         $base['RoundingAmount'] = 0.0;
         $base['TaxAmount']      = $tax_amount_arr;
+        // Algse arve makse ei kuulu kreeditarvele
+        unset( $base['Payment'] );
 
         return $base;
     }
@@ -827,19 +874,61 @@ class My_Simple_Ajax_Plugin {
      * @return string Merit Aktiva VAT UUID.
      */
     private function resolve_vat_uuid( float $rate_pct ): string {
-        $tax_map      = get_option( 'smart_wp_integtaion_tax_map', [] );
-        $default_uuid = $this->tax_field;
-        foreach ( $tax_map as $row ) {
-            if ( ! empty( $row['is_default'] ) && $row['is_default'] === 'yes' && ! empty( $row['uuid'] ) ) {
-                $default_uuid = $row['uuid'];
-            }
-        }
-        foreach ( $tax_map as $row ) {
-            if ( isset( $row['rate'] ) && abs( (float) $row['rate'] - $rate_pct ) < 0.01 && ! empty( $row['uuid'] ) ) {
+        foreach ( (array) get_option( 'smart_wp_integtaion_tax_map', [] ) as $row ) {
+            if ( isset( $row['rate'] ) && $row['rate'] !== '' && abs( (float) $row['rate'] - $rate_pct ) < 0.01
+                && self::is_guid( $row['uuid'] ?? '' ) ) {
                 return $row['uuid'];
             }
         }
-        return $default_uuid;
+        // KM-ita rida (nt eksport väljapoole EL-i), mille määra kaardistuses pole → 0% maks seadest
+        $zero = (string) get_option( 'swi_merit_tax_zero', '' );
+        if ( $rate_pct < 0.01 && self::is_guid( $zero ) ) {
+            return $zero;
+        }
+        return $this->default_tax_id();
+    }
+
+    /**
+     * Vaikimisi maks: Maksude kaardistuse "Vaikimisi" rida, muidu üldseadete vaikimisi maksumäär.
+     * Vigased (mitte-GUID) väärtused jäetakse vahele — Merit nõuab TaxId GUID-i.
+     */
+    private function default_tax_id(): string {
+        foreach ( (array) get_option( 'smart_wp_integtaion_tax_map', [] ) as $row ) {
+            if ( ( $row['is_default'] ?? '' ) === 'yes' && self::is_guid( $row['uuid'] ?? '' ) ) {
+                return $row['uuid'];
+            }
+        }
+        return (string) $this->tax_field;
+    }
+
+    private static function is_guid( $value ): bool {
+        return is_string( $value ) && (bool) preg_match( '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value );
+    }
+
+    /**
+     * Meriti makseobjekt arve loomisel (sendinvoice Payment), kui tellimus on makstud ja selle
+     * makseviis on seotud Meriti makseviisiga. Merit viitab makseviisile NIME järgi, seega
+     * arvestatakse ainult Meritist laaditud makseviise (vanad konto koodid nt "1000" jäetakse välja).
+     */
+    private function payment_object_for_order( \WC_Order $order ): ?array {
+        $map  = (array) get_option( 'smart_wp_integtaion_payment_map', [] );
+        $name = trim( (string) ( $map[ $order->get_payment_method() ] ?? '' ) );
+        if ( $name === '' ) {
+            return null;
+        }
+        $types = (array) get_option( 'swi_merit_payment_types_cache', [] );
+        if ( ! in_array( $name, array_column( $types, 'Name' ), true ) ) {
+            return null;
+        }
+        if ( ! $order->is_paid() && ! $order->get_date_paid() ) {
+            return null;
+        }
+        $date = $order->get_date_paid() ?: $order->get_date_created();
+        return [
+            'PaymentMethod' => $name,
+            'PaidAmount'    => round( (float) $order->get_total(), 2 ),
+            'PaymDate'      => $date ? $date->date( 'YmdHi' ) : gmdate( 'YmdHi' ),
+        ];
     }
 
     /**
@@ -852,8 +941,9 @@ class My_Simple_Ajax_Plugin {
      * @return float Käibemaksu protsent (nt 22.0).
      */
     private function item_tax_rate( \WC_Order_Item_Product $item ): float {
-        $total     = (float) $item->get_total();
-        $total_tax = (float) $item->get_total_tax();
+        // abs(): refundi real on summad negatiivsed
+        $total     = abs( (float) $item->get_total() );
+        $total_tax = abs( (float) $item->get_total_tax() );
         if ( $total <= 0 ) return 0.0;
         return round( $total_tax / $total * 100, 2 );
     }
@@ -936,7 +1026,7 @@ class My_Simple_Ajax_Plugin {
                 $this->maybe_sync_item_to_merit( $product );
             }
 
-            $payload_arrays[] = [
+            $row = [
                 'Item'           => [
                     'Code'        => $sku ? substr( $sku, 0, 20 ) : null,
                     'Description' => $item->get_name(),
@@ -951,6 +1041,11 @@ class My_Simple_Ajax_Plugin {
                 'LocationCode'   => $this->resolve_location_code( $product ),
                 self::ROW_TAX_KEY => (float) $item->get_total_tax(),
             ];
+            // Laokauba krediteerimisel nõuab Merit omahinda (ItemCostAmount); eemaldatakse mitte-laokaubal
+            if ( $order instanceof \WC_Order_Refund ) {
+                $row['ItemCostAmount'] = $this->credit_row_cost_amount( $item, $product, $price_ex, $qty );
+            }
+            $payload_arrays[] = $row;
         }
 
         $shipping_map = get_option( 'smart_wp_integtaion_shipping_map', [] );
@@ -979,6 +1074,7 @@ class My_Simple_Ajax_Plugin {
                 'TaxId'          => $tax_uuid,
                 'LocationCode'   => $this->location_code,
                 self::ROW_TAX_KEY => $ship_tax,
+                '_service'       => true,
             ];
         }
 
@@ -1006,6 +1102,7 @@ class My_Simple_Ajax_Plugin {
                 'TaxId'          => $tax_uuid,
                 'LocationCode'   => $this->location_code,
                 self::ROW_TAX_KEY => $fee_tax,
+                '_service'       => true,
             ];
         }
 
@@ -1067,6 +1164,10 @@ class My_Simple_Ajax_Plugin {
         }
         if ( ! $order->get_meta( '_swi_sent_merit' ) ) {
             wp_send_json_error( [ 'message' => 'Arve pole veel Meritisse saadetud.' ] );
+        }
+        $paid_in_invoice = $this->payment_object_for_order( $order );
+        if ( $paid_in_invoice ) {
+            wp_send_json_error( [ 'message' => 'Arve saadeti Meritisse juba tasutuna (makseviis "' . $paid_in_invoice['PaymentMethod'] . '") — eraldi makset pole vaja.' ] );
         }
 
         $invoice_no = $this->arve_eesliides . $order->get_id();
@@ -1427,6 +1528,190 @@ class My_Simple_Ajax_Plugin {
         } else {
             $product->update_meta_data( '_swi_merit_location_code', $code );
         }
+    }
+
+    /** AJAX: laadib Meriti müügi makseviisid vahemällu. */
+    public function handle_load_payment_types(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        try {
+            $types = ( new MeritServersDataClient() )->get_payment_types();
+        } catch ( \Exception $e ) {
+            wp_send_json_error( [ 'error' => $e->getMessage() ] );
+        }
+        if ( empty( $types ) ) {
+            wp_send_json_error( [ 'error' => 'Meritis ei leitud ühtegi müügi makseviisi.' ] );
+        }
+        wp_send_json_success( [ 'payment_types' => $types ] );
+    }
+
+    /**
+     * Lisab Meriti arve PDF-i tellimuse "täidetud" e-kirjale.
+     *
+     * WooCommerce saadab e-kirja enne 'woocommerce_order_status_changed' hooki, millega arve
+     * automaatselt saadetakse — seepärast saadetakse arve vajadusel siin enne PDF-i pärimist.
+     * PDF salvestatakse ajutisse kausta (mitte uploads, mis on avalik) ja kustutatakse päringu lõpus.
+     * Viga ei tohi e-kirja saatmist takistada.
+     */
+    public function attach_merit_pdf( $attachments, $email_id, $order, $email = null ) {
+        if ( $email_id !== 'customer_completed_order' || ! ( $order instanceof \WC_Order ) ) {
+            return $attachments;
+        }
+        if ( get_option( 'swi_merit_pdf_email' ) !== 'yes' || get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+            return $attachments;
+        }
+        if ( ! $order->get_meta( '_swi_sent_merit' ) ) {
+            $this->auto_send_order( $order->get_id(), '', $order->get_status() );
+            $order = wc_get_order( $order->get_id() );
+            if ( ! $order || ! $order->get_meta( '_swi_sent_merit' ) ) {
+                return $attachments;
+            }
+        }
+
+        try {
+            $pdf = ( new MeritServersDataClient() )->get_invoice_pdf( $this->arve_eesliides . $order->get_id() );
+        } catch ( \Exception $e ) {
+            $order->add_order_note( 'Merit Aktiva: arve PDF-i ei õnnestunud e-kirjale lisada — ' . $e->getMessage() );
+            return $attachments;
+        }
+        $content = base64_decode( (string) ( $pdf['file_content'] ?? '' ), true );
+        if ( ! $content ) {
+            return $attachments;
+        }
+
+        $name = sanitize_file_name( (string) ( $pdf['file_name'] ?? '' ) ) ?: ( 'arve-' . $order->get_id() . '.pdf' );
+        if ( substr( strtolower( $name ), -4 ) !== '.pdf' ) {
+            $name .= '.pdf';
+        }
+        $dir = trailingslashit( get_temp_dir() ) . 'swi-merit-' . wp_generate_password( 12, false );
+        if ( ! wp_mkdir_p( $dir ) || file_put_contents( $dir . '/' . $name, $content ) === false ) {
+            return $attachments;
+        }
+        $path = $dir . '/' . $name;
+        register_shutdown_function( function () use ( $path, $dir ) {
+            @unlink( $path );
+            @rmdir( $dir );
+        } );
+
+        $attachments   = (array) $attachments;
+        $attachments[] = $path;
+        return $attachments;
+    }
+
+    public function add_bulk_action( $actions ) {
+        if ( get_option( 'smart_wp_integtaion_enable' ) === 'yes' ) {
+            $actions['swi_merit_send'] = 'Saada Merit Aktivasse';
+        }
+        return $actions;
+    }
+
+    /**
+     * Massiline saatmine: saadab valitud tellimused, mis pole veel Meritisse läinud.
+     * Juba saadetud tellimused jäetakse vahele (topeltarve kaitse).
+     */
+    public function handle_bulk_action( $redirect_url, $action, $ids ) {
+        if ( $action !== 'swi_merit_send' || ! current_user_can( 'manage_woocommerce' ) ) {
+            return $redirect_url;
+        }
+        $ok = $fail = $skip = 0;
+        foreach ( array_map( 'absint', (array) $ids ) as $order_id ) {
+            $order = wc_get_order( $order_id );
+            if ( ! $order ) continue;
+            if ( $order->get_meta( '_swi_sent_merit' ) ) { $skip++; continue; }
+
+            $payload = $this->build_payload_for_order( $order );
+            if ( ! $payload ) { $fail++; continue; } // põhjus on juba tellimuse märkustes (fail_build)
+
+            $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
+            if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
+                $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
+                $order->delete_meta_data( '_swi_merit_retry' );
+                $order->delete_meta_data( '_swi_merit_retry_count' );
+                $order->save();
+                $order->add_order_note( 'Merit Aktiva: arve edastatud massilise saatmisega (' . $res['status'] . ').' );
+                swi_log_send_history( $order_id, 'ok', 'Massiline saatmine: ' . ( $res['message'] ?? $res['status'] ) );
+                $ok++;
+            } else {
+                $msg = swi_humanize_merit_error( $res );
+                $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
+                swi_log_send_history( $order_id, 'error', 'Massiline saatmine: ' . $msg );
+                $fail++;
+            }
+            usleep( 300000 ); // Meriti päringulimiit
+        }
+        return add_query_arg( [ 'swi_merit_bulk' => $ok . '-' . $fail . '-' . $skip ], $redirect_url );
+    }
+
+    public function show_bulk_action_notice(): void {
+        if ( empty( $_GET['swi_merit_bulk'] ) ) {
+            return;
+        }
+        $parts = array_map( 'absint', explode( '-', sanitize_text_field( wp_unslash( $_GET['swi_merit_bulk'] ) ) ) );
+        [ $ok, $fail, $skip ] = array_pad( $parts, 3, 0 );
+        $class = $fail ? 'notice-warning' : 'notice-success';
+        printf(
+            '<div class="notice %s is-dismissible"><p>Merit Aktiva: saadetud %d, ebaõnnestus %d, juba saadetud %d.%s</p></div>',
+            esc_attr( $class ), $ok, $fail, $skip,
+            $fail ? ' Põhjused leiad tellimuse märkustest.' : ''
+        );
+    }
+
+    /** AJAX: käivitab laoseisu sünkroonimise kohe (Laod paneeli nupp). */
+    public function handle_sync_stock(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        $res = $this->sync_stock_from_merit();
+        if ( ! empty( $res['error'] ) ) {
+            wp_send_json_error( [ 'error' => $res['error'] ] );
+        }
+        wp_send_json_success( $res );
+    }
+
+    /**
+     * Uuendab WooCommerce'i laoseisu Meriti laoseisu järgi (toote SKU = Meriti kaubakood).
+     *
+     * Ainult tooted, millel on laoarvestus sisse lülitatud ja SKU olemas. Iga toote laoseis võetakse
+     * tema enda laost (toode → kategooria → vaikeladu), sama loogikaga kui arveridadel. Toodet, mida
+     * Meriti laoaruandes pole, ei puudutata.
+     *
+     * @return array ['updated' => int, 'checked' => int, 'error' => string|null]
+     */
+    public function sync_stock_from_merit(): array {
+        $client  = new MeritServersDataClient();
+        $reports = [];
+        $updated = $checked = 0;
+
+        $products = wc_get_products( [ 'limit' => -1, 'type' => [ 'simple', 'variation' ], 'return' => 'objects' ] );
+        foreach ( $products as $product ) {
+            if ( ! $product->managing_stock() || ! $product->get_sku() ) continue;
+
+            $loc = $this->resolve_location_code( $product );
+            if ( ! array_key_exists( $loc, $reports ) ) {
+                try {
+                    $reports[ $loc ] = $client->get_stock( $loc );
+                } catch ( \Exception $e ) {
+                    update_option( 'swi_merit_stock_last_sync', current_time( 'mysql' ) . ' — viga: ' . $e->getMessage(), false );
+                    return [ 'updated' => $updated, 'checked' => $checked, 'error' => $e->getMessage() ];
+                }
+            }
+
+            $code = substr( $product->get_sku(), 0, 20 );
+            if ( ! array_key_exists( $code, $reports[ $loc ] ) ) continue;
+            $checked++;
+
+            $qty = (int) floor( (float) $reports[ $loc ][ $code ] );
+            if ( (int) $product->get_stock_quantity() !== $qty ) {
+                wc_update_product_stock( $product, $qty, 'set' );
+                $updated++;
+            }
+        }
+
+        update_option( 'swi_merit_stock_last_sync', current_time( 'mysql' ) . " — kontrollitud {$checked}, uuendatud {$updated}", false );
+        return [ 'updated' => $updated, 'checked' => $checked, 'error' => null ];
     }
 
     public function handle_preview_invoice(): void {
