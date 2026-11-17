@@ -416,6 +416,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             ['key'=>'merit-taxes',       'icon'=>'📋', 'label'=>'Maksud'],
                             ['key'=>'merit-shipping',    'icon'=>'🚚', 'label'=>'Tarne'],
                             ['key'=>'merit-departments', 'icon'=>'🏢', 'label'=>'Osakonnad'],
+                            ['key'=>'merit-locations',   'icon'=>'📦', 'label'=>'Laod'],
                             ['key'=>'merit-tools',       'icon'=>'🔧', 'label'=>'Tööriistad'],
                         ];
                         foreach ($merit_nav as $i => $item) : ?>
@@ -515,6 +516,40 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             <div class="swi-section-title">Merit Aktiva – Tarnemeetodite kaardistus</div>
                             <div class="swi-section-desc">Seo tarne-teenused Merit Aktiva artikli koodidega.</div>
                             <div class="swi-card"><?php $this->field_shipping_map(['id'=>$this->opt_shipping_map]); ?></div>
+                            <?php
+                            // Transpordiridade eraldi maksutüüp (nt SmartPost, Omniva, kuller)
+                            $ship_vat_saved = get_option('swi_merit_shipping_maksumaar', '');
+                            $ship_vat_opts  = [
+                                '973a4395-665f-47a6-a5b6-5384dd24f8d0' => '0%',
+                                '6b618baa-680b-4606-9ad9-eff0beb27344' => '9%',
+                                'fd050f9b-f376-40fb-aee5-af2d1f04970f' => '13%',
+                                'b9b25735-6a15-4d4e-8720-25b254ae3d21' => '20%',
+                                '307000b4-f1f2-4bc7-a110-24cb18d77212' => '22%',
+                                '1e420e04-3dd7-46a5-b71f-0490779c2638' => '24%',
+                            ];
+                            foreach ((array) get_option($this->opt_tax_map, []) as $tm) {
+                                if (!empty($tm['uuid']) && !isset($ship_vat_opts[$tm['uuid']])) {
+                                    $ship_vat_opts[$tm['uuid']] = ($tm['rate'] ?? '') . '% (' . $tm['uuid'] . ')';
+                                }
+                            }
+                            if ($ship_vat_saved && !isset($ship_vat_opts[$ship_vat_saved])) $ship_vat_opts[$ship_vat_saved] = $ship_vat_saved;
+                            ?>
+                            <div class="swi-card">
+                                <table class="form-table" style="margin-bottom:0;">
+                                    <tr>
+                                        <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;">Transpordi käibemaksumäär</th>
+                                        <td style="padding:8px 0;">
+                                            <select name="swi_merit_shipping_maksumaar" style="min-width:300px;">
+                                                <option value="">— sama mis toodetel —</option>
+                                                <?php foreach ($ship_vat_opts as $vid => $vlabel) : ?>
+                                                <option value="<?php echo esc_attr($vid); ?>" <?php selected($ship_vat_saved, $vid); ?>><?php echo esc_html($vlabel); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">Maksutüüp transpordiridadel. Arve KM kokkuvõte jagatakse maksutüüpide kaupa.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
                         </div>
 
                         <?php // Feature 9: Osakonnad paneel ?>
@@ -622,6 +657,60 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     tbody.appendChild(tr);
                                 });
                                 </script>
+                            </div>
+                        </div>
+
+                        <?php
+                        // Meriti laod: vaikeladu + kategooria → ladu (toote enda ladu on tootelehel)
+                        $merit_locations = (array) get_option('swi_merit_locations_cache', []);
+                        $saved_location  = (string) get_option('swi_merit_location_code', '1');
+                        $loc_map_saved   = (array) get_option('swi_category_location_map', []);
+                        $loc_categories  = get_terms(['taxonomy' => 'product_cat', 'hide_empty' => false]);
+                        $loc_codes       = [];
+                        foreach ($merit_locations as $loc) { $loc_codes[$loc['Code']] = $loc['Code'] . ($loc['Name'] !== '' ? ' — ' . $loc['Name'] : ''); }
+                        $loc_select = function ($name, $value, $empty_label) use ($loc_codes) {
+                            $codes = $loc_codes;
+                            if ($value !== '' && !isset($codes[$value])) $codes[$value] = $value;
+                            echo '<select name="' . esc_attr($name) . '" style="min-width:300px;">';
+                            echo '<option value="">' . esc_html($empty_label) . '</option>';
+                            foreach ($codes as $code => $label) {
+                                echo '<option value="' . esc_attr($code) . '" ' . selected($value, (string) $code, false) . '>' . esc_html($label) . '</option>';
+                            }
+                            echo '</select>';
+                        };
+                        ?>
+                        <div class="swi-panel" id="swi-panel-merit-locations">
+                            <div class="swi-section-title">Merit Aktiva – Laod</div>
+                            <div class="swi-section-desc">Vali ladu, kust kaup Meriti arvel maha läheb. Ladu saadetakse ainult siis, kui arve ridade tüüp on LaoKaup.</div>
+                            <div class="swi-card">
+                                <p style="margin:0 0 12px;">
+                                    <button type="button" id="swi-load-locations-btn" class="button button-secondary">Lae laod Meritist</button>
+                                    <span id="swi-locations-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
+                                </p>
+                                <table class="form-table" style="margin-bottom:0;">
+                                    <tr>
+                                        <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;">Vaikeladu</th>
+                                        <td style="padding:8px 0;">
+                                            <?php $loc_select('swi_merit_location_code', $saved_location, '— ära saada ladu —'); ?>
+                                            <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">Kasutatakse, kui tootel ega selle kategoorial pole oma ladu.<?php if (empty($merit_locations)) : ?> Ladusid pole veel laaditud — vajuta "Lae laod Meritist".<?php endif; ?></p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="swi-card">
+                                <p style="margin:0 0 12px;font-weight:600;font-size:12.5px;">Kategooria → Ladu kaardistus</p>
+                                <p style="margin:0 0 12px;font-size:12px;color:#6b7280;">Toote enda ladu (Toote andmed → Laoseis) on eelisjärjekorras, seejärel kategooria (ka ülemkategooria), siis vaikeladu.</p>
+                                <table class="widefat">
+                                    <thead><tr><th>Kategooria</th><th>Ladu</th></tr></thead>
+                                    <tbody>
+                                    <?php if (!is_wp_error($loc_categories)) foreach ($loc_categories as $cat) : ?>
+                                    <tr>
+                                        <td><?php echo esc_html($cat->name); ?></td>
+                                        <td><?php $loc_select('swi_loc_map[' . $cat->slug . ']', (string) ($loc_map_saved[$cat->slug] ?? ''), '— vaikeladu —'); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -2746,6 +2835,31 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 l.textContent = on ? 'Lubatud' : 'Keelatud';
             }
 
+            // Meriti ladude laadimine — valikud joonistatakse vahemälust, seega laadime lehe uuesti
+            document.addEventListener('DOMContentLoaded', function() {
+                var locBtn = document.getElementById('swi-load-locations-btn');
+                if (!locBtn) return;
+                locBtn.addEventListener('click', function() {
+                    var spinner = document.getElementById('swi-locations-spinner');
+                    locBtn.disabled = true;
+                    if (spinner) spinner.style.display = 'inline';
+                    jQuery.post(ajaxurl, { action: 'swi_merit_load_locations', security: MyAjax.nonce }, function(resp) {
+                        locBtn.disabled = false;
+                        if (spinner) spinner.style.display = 'none';
+                        if (!resp.success) {
+                            swiNotify((resp.data && resp.data.error) ? resp.data.error : 'Ladude laadimine ebaõnnestus', 'error');
+                            return;
+                        }
+                        swiNotify(resp.data.locations.length + ' ladu laaditud.', 'ok');
+                        setTimeout(function() { window.location.reload(); }, 800);
+                    }).fail(function() {
+                        locBtn.disabled = false;
+                        if (spinner) spinner.style.display = 'none';
+                        swiNotify('Ladude laadimine ebaõnnestus', 'error');
+                    });
+                });
+            });
+
             // Feature 1: Merit VAT koodide laadimine
             document.addEventListener('DOMContentLoaded', function() {
                 var vatBtn = document.getElementById('swi-load-vatcodes-btn');
@@ -3309,6 +3423,8 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'smart_wp_integtaion_maksumaar',
                 'smart_wp_integtaion_arve_ridade_tyyp',
                 'smart_wp_integtaion_deparment',
+                'swi_merit_location_code',
+                'swi_merit_shipping_maksumaar',
                 'swi_simplebooks_order_status',
                 'swi_smartaccounts_order_status',
                 'swi_erply_order_status',
@@ -3351,6 +3467,19 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 }
             }
             update_option('swi_category_dept_map', $dept_map_clean, false);
+
+            // Meriti laod: kategooria → ladu (ainult Meriti vormi postitusel)
+            if ( isset( $_POST['swi_merit_location_code'] ) ) {
+                $loc_map_clean = [];
+                foreach ( (array) ( $_POST['swi_loc_map'] ?? [] ) as $cat_slug => $loc_code ) {
+                    $k = sanitize_title( wp_unslash( (string) $cat_slug ) );
+                    $v = sanitize_text_field( wp_unslash( (string) $loc_code ) );
+                    if ( $k !== '' && $v !== '' ) {
+                        $loc_map_clean[ $k ] = $v;
+                    }
+                }
+                update_option( 'swi_category_location_map', $loc_map_clean, false );
+            }
 
             // Maps (country, payment, tax, shipping)
             foreach ( [
@@ -3430,6 +3559,9 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'regno',
                 'swi_merit_email_notify',
                 'swi_category_dept_map',
+                'swi_merit_location_code',
+                'swi_merit_shipping_maksumaar',
+                'swi_category_location_map',
             ];
         }
 

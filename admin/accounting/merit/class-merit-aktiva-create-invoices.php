@@ -89,6 +89,11 @@ class My_Simple_Ajax_Plugin {
         add_action( 'wp_ajax_swi_merit_invoice_status', [ $this, 'handle_invoice_status' ] );
         add_action( 'wp_ajax_swi_merit_delete_invoice', [ $this, 'handle_delete_merit_invoice' ] );
 
+        // Meriti laod: laadimine seadetes + toote ladu (Toote andmed → Laoseis)
+        add_action( 'wp_ajax_swi_merit_load_locations', [ $this, 'handle_load_locations' ] );
+        add_action( 'woocommerce_product_options_inventory_product_data', [ $this, 'render_product_location_field' ] );
+        add_action( 'woocommerce_admin_process_product_object', [ $this, 'save_product_location_field' ] );
+
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
 
@@ -108,6 +113,210 @@ class My_Simple_Ajax_Plugin {
         $this->arve_ridade_tyyp = get_option( 'smart_wp_integtaion_arve_ridade_tyyp' );
         $this->department_code  = get_option( 'smart_wp_integtaion_deparment' );
         $this->AccountingDoc    = get_option( 'smart_wp_integtaion_AccountingDoc' );
+        // Vaikeladu: seadistamata = "1" (varasem käitumine), tühi = ladu ei saadeta
+        $this->location_code      = (string) get_option( 'swi_merit_location_code', '1' );
+        $this->shipping_tax_field = (string) get_option( 'swi_merit_shipping_maksumaar', '' );
+    }
+
+    /** Ridade ja tellimuse summa suurim lubatud vahe (sendi-ümardus); suurem vahe = rida puudu. */
+    const MAX_ROUNDING = 0.05;
+
+    /** Vaikeladu (Meriti LocationCode); tühi = ladu ei saadeta. */
+    private $location_code = '1';
+
+    /** Transpordiridade Meriti maksu UUID; tühi = sama loogika mis toodetel. */
+    private $shipping_tax_field = '';
+
+    /** Viimane build_payload_for_order() vea põhjus (null-tagastuse selgitus kasutajale). */
+    public $last_error = '';
+
+    /** Eelvaade: ära loo Meritis kliente/tooteid, ainult koosta payload. */
+    public $dry_run = false;
+
+    /** Rea KM summa hoitakse ajutises võtmes '_tax' kuni TaxAmount kokkuvõtte koostamiseni. */
+    const ROW_TAX_KEY = '_tax';
+
+    /**
+     * Normaliseerib nime: eemaldab algus-/lõputühikud ja asendab järjestikused tühikud ühega.
+     * Ilma selleta tekitaks "John  Lennon" (topelttühik) Meritis eraldi kliendikaardi.
+     */
+    private static function clean_name( string $name ): string {
+        return trim( (string) preg_replace( '/\s+/u', ' ', $name ) );
+    }
+
+    /**
+     * Salvestab payloadi koostamise vea: tellimuse märkus + saatmise ajalugu (sama teadet ei korrata,
+     * et cron iga 10 min järel märkusi ei kuhjaks) ja tagastab null.
+     */
+    private function fail_build( \WC_Order $order, string $message ): ?array {
+        $this->last_error = $message;
+        if ( $this->dry_run ) {
+            return null;
+        }
+        if ( $order->get_meta( '_swi_merit_build_error' ) !== $message ) {
+            $order->update_meta_data( '_swi_merit_build_error', $message );
+            $order->save();
+            $order->add_order_note( 'Merit Aktiva: arvet ei saadetud — ' . $message );
+            swi_log_send_history( $order->get_id(), 'error', $message );
+        }
+        return null;
+    }
+
+    /** Tellimuse lisaväli: uus võti '_billing_x', vana võti 'billing_x' (Standard Books jt). */
+    private static function order_field( \WC_Order $order, string $key ): string {
+        $v = $order->get_meta( '_billing_' . $key );
+        if ( $v === '' || $v === null ) {
+            $v = $order->get_meta( 'billing_' . $key );
+        }
+        return trim( (string) $v );
+    }
+
+    /**
+     * Leiab tootele Meriti lao: toode → põhitoode (variatsioon) → kategooria (+ ülemkategooriad) → vaikeladu.
+     */
+    private function resolve_location_code( $product ): string {
+        if ( ! $product ) {
+            return $this->location_code;
+        }
+        $own = (string) $product->get_meta( '_swi_merit_location_code' );
+        if ( $own !== '' ) {
+            return $own;
+        }
+
+        $product_id = $product->get_id();
+        if ( $product->get_parent_id() ) {
+            $parent = wc_get_product( $product->get_parent_id() );
+            if ( $parent ) {
+                $parent_loc = (string) $parent->get_meta( '_swi_merit_location_code' );
+                if ( $parent_loc !== '' ) {
+                    return $parent_loc;
+                }
+                $product_id = $parent->get_id();
+            }
+        }
+
+        $cat_map = (array) get_option( 'swi_category_location_map', [] );
+        if ( $cat_map ) {
+            $terms = get_the_terms( $product_id, 'product_cat' );
+            if ( is_array( $terms ) ) {
+                // Kõige sügavam (täpsem) kategooria enne, siis selle ülemkategooriad
+                usort( $terms, function ( $a, $b ) {
+                    return count( get_ancestors( $b->term_id, 'product_cat' ) ) - count( get_ancestors( $a->term_id, 'product_cat' ) );
+                } );
+                foreach ( $terms as $term ) {
+                    $chain = array_merge( [ $term->term_id ], get_ancestors( $term->term_id, 'product_cat' ) );
+                    foreach ( $chain as $term_id ) {
+                        $t = get_term( $term_id, 'product_cat' );
+                        if ( $t && ! is_wp_error( $t ) && ! empty( $cat_map[ $t->slug ] ) ) {
+                            return (string) $cat_map[ $t->slug ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $this->location_code;
+    }
+
+    /**
+     * Kaubatüüp ja ladu arvereale. Laokaup (1): LocationCode + Item.DefLocationCode (Merit nõuab
+     * mitme lao korral uue kauba loomisel). Teenus (2) / kaup (3): ladu ei saadeta.
+     */
+    private function apply_item_type_and_location( array $row ): array {
+        $type = (int) $this->arve_ridade_tyyp ?: 1;
+        $row['Item']['Type'] = $type;
+        $location = isset( $row['LocationCode'] ) ? (string) $row['LocationCode'] : '';
+        if ( $type === 1 && $location !== '' ) {
+            $row['LocationCode']            = $location;
+            $row['Item']['DefLocationCode'] = $location;
+        } else {
+            unset( $row['LocationCode'], $row['Item']['DefLocationCode'] );
+        }
+        return $row;
+    }
+
+    /**
+     * Arve päise KM kokkuvõte maksutüüpide kaupa ridade '_tax' väärtustest. Ümardusvahe tegeliku
+     * KM-iga lisatakse põhimaksutüübile, et kokkuvõtte summa võrduks alati tellimuse KM-iga.
+     * Eemaldab ridadelt ajutise '_tax' võtme (viide).
+     */
+    private function build_tax_amounts( array &$rows, string $main_tax_id, float $total_tax ): array {
+        $by_tax = [];
+        foreach ( $rows as &$row ) {
+            $id = $row['TaxId'] ?: $main_tax_id;
+            $by_tax[ $id ] = ( $by_tax[ $id ] ?? 0.0 ) + (float) ( $row[ self::ROW_TAX_KEY ] ?? 0 );
+            unset( $row[ self::ROW_TAX_KEY ] );
+        }
+        unset( $row );
+        if ( ! isset( $by_tax[ $main_tax_id ] ) ) {
+            $by_tax = [ $main_tax_id => 0.0 ] + $by_tax;
+        }
+        $by_tax = array_map( function ( $v ) { return round( $v, 2 ); }, $by_tax );
+        $by_tax[ $main_tax_id ] = round( $by_tax[ $main_tax_id ] + ( $total_tax - array_sum( $by_tax ) ), 2 );
+
+        $result = [];
+        foreach ( $by_tax as $id => $amount ) {
+            $result[] = [ 'TaxId' => $id, 'Amount' => $amount ];
+        }
+        return $result;
+    }
+
+    /** Ridade neto summa nii, nagu Merit seda arvutab (iga rida ümardatud 2 kohta). */
+    private static function rows_net_total( array $rows ): float {
+        $sum = 0.0;
+        foreach ( $rows as $row ) {
+            $sum += round( (float) $row['Price'] * (float) $row['Quantity'], 2 );
+        }
+        return round( $sum, 2 );
+    }
+
+    /**
+     * Leiab eraisiku Meriti CustomerId: tellimuse meta → kasutaja meta → Meriti otsing täpse nime järgi
+     * (või uue kaardi loomine). Ilma Id-ta seoks Merit kõik eraisikud esimese eraisiku kaardiga.
+     *
+     * @return string|null CustomerId; null kui nimi puudub või eelvaade.
+     * @throws \Exception Meriti/vaheserveri vea korral.
+     */
+    private function resolve_private_customer_id( \WC_Order $order, array $customer ): ?string {
+        $cached = (string) $order->get_meta( '_swi_merit_customer_id' );
+        if ( $cached !== '' ) {
+            return $cached;
+        }
+        $user_id = $order->get_customer_id();
+        if ( $user_id ) {
+            $user_cached = (string) get_user_meta( $user_id, '_swi_merit_customer_id', true );
+            if ( $user_cached !== '' ) {
+                return $user_cached;
+            }
+        }
+        if ( $customer['Name'] === '' || $this->dry_run ) {
+            return null;
+        }
+
+        $client = new MeritServersDataClient();
+        $res    = $client->resolve_customer( [
+            'name'             => $customer['Name'],
+            'email'            => $customer['Email'] ?? '',
+            'country_code'     => $customer['CountryCode'] ?? 'EE',
+            'address'          => $customer['Address'] ?? null,
+            'city'             => $customer['City'] ?? null,
+            'county'           => $customer['County'] ?? null,
+            'postal_code'      => $customer['PostalCode'] ?? null,
+            'phone'            => $customer['PhoneNo'] ?? null,
+            'currency_code'    => $customer['CurrencyCode'] ?? 'EUR',
+            'payment_deadline' => $customer['PaymentDeadLine'] ?? 7,
+        ] );
+        $id = (string) ( $res['customer_id'] ?? '' );
+        if ( $id === '' ) {
+            throw new \RuntimeException( 'Merit ei tagastanud kliendi ID-d.' );
+        }
+
+        $order->update_meta_data( '_swi_merit_customer_id', $id );
+        $order->save();
+        if ( ! empty( $res['created'] ) ) {
+            $order->add_order_note( 'Merit Aktiva: loodi uus kliendikaart (' . $customer['Name'] . ').' );
+        }
+        return $id;
     }
 
     /**
@@ -376,11 +585,18 @@ class My_Simple_Ajax_Plugin {
         // Maksemeetodi kaardistus WooCommerce payment_method → Merit konto kood
         $wc_method     = $order->get_payment_method();
         $merit_account = $payment_map[ $wc_method ] ?? null;
-        $is_company    = ! empty( $order->get_billing_company() );
+        $this->last_error = '';
+
+        // Ettevõte: ettevõtte nimi või registrikood tellimusel (checkout väljad _billing_reg_no / _billing_vat_no)
+        $company_name = self::clean_name( (string) $order->get_billing_company() );
+        $reg_no       = self::order_field( $order, 'reg_no' );
+        $vat_no       = self::order_field( $order, 'vat_no' );
+        $is_company   = $company_name !== '' || $reg_no !== '';
+        $person_name  = self::clean_name( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 
         // NotTDCustomer = true tähendab eraisik (ei ole käibemaksukohustuslane)
         $customer = [
-            'Name'            => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
+            'Name'            => ( $is_company && $company_name !== '' ) ? $company_name : $person_name,
             'NotTDCustomer'   => ! $is_company,
             'CurrencyCode'    => $order->get_currency(),
             'PaymentDeadLine' => (int) $this->payment_deadline,
@@ -392,10 +608,11 @@ class My_Simple_Ajax_Plugin {
             'PostalCode'      => $order->get_billing_postcode(),
             'Email'           => $order->get_billing_email(),
         ];
-        // RegNo ja VatRegNo on Merit API-s kohustuslikud väljad ainult äriklientidel
+        // RegNo ja VatRegNo on Merit API-s kohustuslikud väljad ainult äriklientidel.
+        // Võetakse tellimuselt — mitte poe enda registrikoodi seadest ('regno').
         if ( $is_company ) {
-            $customer['RegNo']    = $this->regNo ?: '';
-            $customer['VatRegNo'] = '';
+            $customer['RegNo']    = $reg_no;
+            $customer['VatRegNo'] = $vat_no;
         }
         $phone = $order->get_billing_phone();
         if ( $phone ) {
@@ -407,54 +624,47 @@ class My_Simple_Ajax_Plugin {
             $customer['County'] = $county;
         }
 
-        // Lazy kliendi sync: ainult registreeritud kasutajatele (külalisostjal puudub
-        // usaldusväärne korduvkasutuse võti ja Merit nõuab unikaalset Name't)
-        $this->maybe_sync_customer_to_merit( $order, $customer );
+        if ( $is_company ) {
+            // Ettevõtte seob Merit registrikoodi järgi; registreeritud kasutajale luuakse kaart ka ette
+            if ( ! $this->dry_run ) {
+                $this->maybe_sync_customer_to_merit( $order, $customer );
+            }
+        } else {
+            // Eraisik: leiame/loome kliendikaardi ise ja saadame arve kindla Id-ga — muidu seob
+            // Merit kõik eraisikud esimese eraisiku kaardiga
+            try {
+                $customer_id = $this->resolve_private_customer_id( $order, $customer );
+            } catch ( \Exception $e ) {
+                return $this->fail_build( $order, 'Kliendi leidmine/loomine Meritis ebaõnnestus — ' . $e->getMessage() );
+            }
+            if ( $customer_id ) {
+                $customer = [ 'Id' => $customer_id ] + $customer;
+            }
+        }
 
         $rows = $this->create_invoice_items_array( $order, $vat_code );
 
-        // TotalAmount = kõigi ridade kogusumma ilma käibemaksuta (neto)
-        $total_amount = 0.0;
-        foreach ( $rows as $row ) {
-            $total_amount += (float) $row['Price'] * (float) $row['Quantity'];
+        // TotalAmount = tellimuse summa ilma KM-ita. Ridade ja selle vahe (sendi-ümardus) läheb
+        // RoundingAmount'i; suurem vahe tähendab, et mõni tellimuse osa jäi arveridadelt välja.
+        $order_total_tax = round( (float) $order->get_total_tax(), 2 );
+        $total_amount    = round( (float) $order->get_total() - $order_total_tax, 2 );
+        $rounding_amount = round( $total_amount - self::rows_net_total( $rows ), 2 );
+        if ( abs( $rounding_amount ) > self::MAX_ROUNDING ) {
+            return $this->fail_build( $order, sprintf(
+                'Arveridade summa (%s) ei võrdu tellimuse summaga ilma KM-ita (%s), vahe %s. Mõni tellimuse osa (toode, tasu, transport või allahindlus) ei jõudnud arveridadele.',
+                number_format( $total_amount - $rounding_amount, 2, ',', '' ),
+                number_format( $total_amount, 2, ',', '' ),
+                number_format( $rounding_amount, 2, ',', '' )
+            ) );
         }
-        $total_amount = round( $total_amount, 2 );
 
-        // Merit nõuab TaxAmount massiivi kus iga UUID kohta eraldi käibemaksu summa.
-        // Grupeerime käibemaksud UUID järgi, kuna ühel arvel võib olla mitu maksumäära
-        // (nt Eesti tooted 22% + nullmääraga tooted).
-        $tax_by_uuid = [];
-        foreach ( $order->get_items() as $item ) {
-            $item_tax = round( (float) $item->get_total_tax(), 2 );
-            if ( $item_tax <= 0 ) continue;
-            $uuid = $vat_code ?: $this->resolve_vat_uuid( $this->item_tax_rate( $item ) );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $item_tax;
-        }
-        foreach ( $order->get_shipping_methods() as $shipping_item ) {
-            $ship_tax = round( (float) $shipping_item->get_total_tax(), 2 );
-            if ( $ship_tax <= 0 ) continue;
-            $ship_total = (float) $shipping_item->get_total();
-            // Tarne protsent arvutatakse dünaamiliselt, kuna tarne maksumäär võib erineda toote omast
-            $ship_rate  = $ship_total > 0 ? round( $ship_tax / $ship_total * 100, 2 ) : 0.0;
-            $uuid = $vat_code ?: $this->resolve_vat_uuid( $ship_rate );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $ship_tax;
-        }
-        foreach ( $order->get_fees() as $fee_item ) {
-            $fee_tax = round( (float) $fee_item->get_total_tax(), 2 );
-            if ( $fee_tax <= 0 ) continue;
-            $fee_total = (float) $fee_item->get_total();
-            // Fee maksumäär arvutatakse dünaamiliselt, kuna see võib erineda toote omast
-            $fee_rate  = $fee_total > 0 ? round( $fee_tax / $fee_total * 100, 2 ) : 0.0;
-            $uuid = $vat_code ?: $this->resolve_vat_uuid( $fee_rate );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $fee_tax;
-        }
-        // Tagavaravõimalus: kui ühelgi real pole käibemaksu (nt 0% orderid), kasuta WC kogusummat
-        if ( empty( array_filter( $tax_by_uuid ) ) ) {
-            $tax_by_uuid[ $vat_code ?: $this->tax_field ] = round( (float) $order->get_total_tax(), 2 );
-        }
-        $tax_amount_arr = [];
-        foreach ( $tax_by_uuid as $uuid => $amount ) {
-            $tax_amount_arr[] = [ 'TaxId' => $uuid, 'Amount' => round( $amount, 2 ) ];
+        // Merit nõuab TaxAmount massiivi, kus iga maksu UUID kohta on eraldi KM summa
+        // (ühel arvel võib olla mitu määra, nt tooted 24% + transport teise määraga).
+        $tax_amount_arr = $this->build_tax_amounts( $rows, $vat_code ?: (string) $this->tax_field, $order_total_tax );
+
+        if ( $order->get_meta( '_swi_merit_build_error' ) && ! $this->dry_run ) {
+            $order->delete_meta_data( '_swi_merit_build_error' );
+            $order->save();
         }
 
         // Arve kuupäev = tellimuse loomise kuupäev; tähtaeg = loomise kuupäev + maksetähtaeg
@@ -494,7 +704,7 @@ class My_Simple_Ajax_Plugin {
             'DepartmentCode' => $dept_code,
             'InvoiceRow'     => $rows,
             'TotalAmount'    => $total_amount,
-            'RoundingAmount' => 0.0,
+            'RoundingAmount' => $rounding_amount,
             'TaxAmount'      => $tax_amount_arr,
         ];
 
@@ -524,44 +734,55 @@ class My_Simple_Ajax_Plugin {
             return null;
         }
 
-        $rows = $this->create_invoice_items_array( $refund );
+        $main_tax_id = (string) $this->tax_field;
+        $rows        = $this->create_invoice_items_array( $refund );
+
         if ( empty( $rows ) ) {
-            return null;
+            // Ainult summaga tagastus (ilma ridadeta): üks krediteeritav rida. Neto ja KM jagatakse
+            // algse tellimuse KM-i suhte järgi, kuna refundil endal maksuinfot pole.
+            $gross = round( abs( (float) $refund->get_amount() ), 2 );
+            if ( $gross <= 0 ) {
+                return null;
+            }
+            $order_tax = (float) $order->get_total_tax();
+            $order_net = (float) $order->get_total() - $order_tax;
+            $ratio     = $order_net > 0 ? $order_tax / $order_net : 0.0;
+            $net       = round( $gross / ( 1 + $ratio ), 2 );
+
+            $rows = [ $this->apply_item_type_and_location( [
+                'Item'           => [
+                    'Code'        => 'REFUND',
+                    'Description' => 'Tagastus' . ( $refund->get_reason() ? ': ' . $refund->get_reason() : '' ),
+                    'UOMName'     => 'tk',
+                ],
+                'Quantity'       => -1.0,
+                'Price'          => $net,
+                'DiscountPct'    => 0,
+                'DiscountAmount' => 0,
+                'TaxId'          => $main_tax_id,
+                'LocationCode'   => $this->location_code,
+                self::ROW_TAX_KEY => -round( $gross - $net, 2 ),
+            ] ) ];
+            $total_tax = -round( $gross - $net, 2 );
+        } else {
+            $total_tax = 0.0;
+            foreach ( $rows as $row ) {
+                $total_tax += (float) ( $row[ self::ROW_TAX_KEY ] ?? 0 );
+            }
+            $total_tax = round( $total_tax, 2 );
         }
 
-        $total_amount = 0.0;
-        foreach ( $rows as $row ) {
-            $total_amount += (float) $row['Price'] * (float) $row['Quantity'];
-        }
-        $total_amount = round( $total_amount, 2 );
-
-        $tax_by_uuid = [];
-        foreach ( $refund->get_items() as $item ) {
-            $item_tax = round( (float) $item->get_total_tax(), 2 );
-            if ( $item_tax == 0.0 ) continue;
-            $uuid = $this->resolve_vat_uuid( $this->item_tax_rate( $item ) );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $item_tax;
-        }
-        foreach ( $refund->get_fees() as $fee_item ) {
-            $fee_tax = round( (float) $fee_item->get_total_tax(), 2 );
-            if ( $fee_tax == 0.0 ) continue;
-            $fee_total = (float) $fee_item->get_total();
-            $fee_rate  = $fee_total != 0.0 ? round( $fee_tax / $fee_total * 100, 2 ) : 0.0;
-            $uuid      = $this->resolve_vat_uuid( $fee_rate );
-            $tax_by_uuid[ $uuid ] = ( $tax_by_uuid[ $uuid ] ?? 0.0 ) + $fee_tax;
-        }
-        $tax_amount_arr = [];
-        foreach ( $tax_by_uuid as $uuid => $amount ) {
-            $tax_amount_arr[] = [ 'TaxId' => $uuid, 'Amount' => round( $amount, 2 ) ];
-        }
+        $total_amount   = self::rows_net_total( $rows );
+        $tax_amount_arr = $this->build_tax_amounts( $rows, $main_tax_id, $total_tax );
 
         // Kreediitarve number peab Meriti jaoks olema unikaalne — algse arve numbrile lisame refundi ID
         $base['InvoiceNo']   = $this->arve_eesliides . $order->get_id() . '-C' . $refund->get_id();
         $base['DocDate']     = $refund->get_date_created() ? $refund->get_date_created()->date( 'Ymd' ) : gmdate( 'Ymd' );
         $base['DueDate']     = $base['DocDate'];
         $base['InvoiceRow']  = $rows;
-        $base['TotalAmount'] = $total_amount;
-        $base['TaxAmount']   = $tax_amount_arr;
+        $base['TotalAmount']    = $total_amount;
+        $base['RoundingAmount'] = 0.0;
+        $base['TaxAmount']      = $tax_amount_arr;
 
         return $base;
     }
@@ -711,7 +932,7 @@ class My_Simple_Ajax_Plugin {
 
             // Lazy toote sync: ainult päris tellimuse (mitte refundi) ridade ehitamisel,
             // ja ainult kui toodet ei ole veel Meriti tootekataloogis
-            if ( $order instanceof \WC_Order && $product ) {
+            if ( $order instanceof \WC_Order && $product && ! $this->dry_run ) {
                 $this->maybe_sync_item_to_merit( $product );
             }
 
@@ -727,7 +948,8 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $tax_uuid,
-                'LocationCode'   => '1',
+                'LocationCode'   => $this->resolve_location_code( $product ),
+                self::ROW_TAX_KEY => (float) $item->get_total_tax(),
             ];
         }
 
@@ -737,7 +959,8 @@ class My_Simple_Ajax_Plugin {
             if ( $shipping_total <= 0 ) continue;
             $ship_tax    = (float) $shipping_item->get_total_tax();
             $ship_rate   = $shipping_total > 0 ? round( $ship_tax / $shipping_total * 100, 2 ) : 0.0;
-            $tax_uuid    = $vat_code_override ?: $this->resolve_vat_uuid( $ship_rate );
+            // Transpordil võib olla oma maksutüüp (seade), muidu sama loogika mis toodetel
+            $tax_uuid    = $this->shipping_tax_field ?: ( $vat_code_override ?: $this->resolve_vat_uuid( $ship_rate ) );
             $method_id   = $shipping_item->get_method_id();
             // Shipping_map võimaldab eri tarnija meetodeid Merit-is eri kaubakoodi alla panna
             $ship_code   = ! empty( $shipping_map[ $method_id ] ) ? substr( $shipping_map[ $method_id ], 0, 20 ) : 'TRANSPORT';
@@ -754,7 +977,8 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $tax_uuid,
-                'LocationCode'   => '1',
+                'LocationCode'   => $this->location_code,
+                self::ROW_TAX_KEY => $ship_tax,
             ];
         }
 
@@ -780,11 +1004,13 @@ class My_Simple_Ajax_Plugin {
                 'DiscountPct'    => 0,
                 'DiscountAmount' => 0,
                 'TaxId'          => $tax_uuid,
-                'LocationCode'   => '1',
+                'LocationCode'   => $this->location_code,
+                self::ROW_TAX_KEY => $fee_tax,
             ];
         }
 
-        return $payload_arrays;
+        // Kaubatüüp kõigile ridadele; ladu (+ Item.DefLocationCode) ainult laokaubal
+        return array_map( [ $this, 'apply_item_type_and_location' ], $payload_arrays );
     }
 
     /**
@@ -807,7 +1033,7 @@ class My_Simple_Ajax_Plugin {
         }
         $payload = $this->build_payload_for_order( $order );
         if ( ! $payload ) {
-            wp_send_json_error( [ 'message' => 'Payload loomine ebaõnnestus.' ] );
+            wp_send_json_error( [ 'message' => $this->last_error ?: 'Payload loomine ebaõnnestus.' ] );
         }
         $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
         if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
@@ -897,7 +1123,7 @@ class My_Simple_Ajax_Plugin {
 
         $payload = $this->build_credit_payload_for_refund( $order, $refund );
         if ( ! $payload ) {
-            wp_send_json_error( [ 'message' => 'Kreediitarve payloadi loomine ebaõnnestus.' ] );
+            wp_send_json_error( [ 'message' => $this->last_error ?: 'Kreediitarve payloadi loomine ebaõnnestus.' ] );
         }
 
         $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
@@ -1149,6 +1375,60 @@ class My_Simple_Ajax_Plugin {
      *
      * @since 1.0.0 (Feature 6)
      */
+    /**
+     * AJAX: laadib Meriti laod vahemällu ('swi_merit_locations_cache') seadete lehe valikute jaoks.
+     */
+    public function handle_load_locations(): void {
+        check_ajax_referer( 'my_nonce', 'security' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'error' => 'Puuduvad õigused.' ] );
+        }
+        try {
+            $locations = ( new MeritServersDataClient() )->get_locations();
+        } catch ( \Exception $e ) {
+            wp_send_json_error( [ 'error' => $e->getMessage() ] );
+        }
+        if ( empty( $locations ) ) {
+            wp_send_json_error( [ 'error' => 'Meritis ei leitud ühtegi aktiivset ladu.' ] );
+        }
+        wp_send_json_success( [ 'locations' => $locations ] );
+    }
+
+    /** Toote ladu Meritis (Toote andmed → Laoseis). Tühi = kategooria või vaikeladu. */
+    public function render_product_location_field(): void {
+        global $product_object;
+        $options = [ '' => '— kategooria või vaikeladu —' ];
+        foreach ( (array) get_option( 'swi_merit_locations_cache', [] ) as $loc ) {
+            $options[ $loc['Code'] ] = $loc['Code'] . ( $loc['Name'] !== '' ? ' — ' . $loc['Name'] : '' );
+        }
+        $value = $product_object ? (string) $product_object->get_meta( '_swi_merit_location_code' ) : '';
+        if ( $value !== '' && ! isset( $options[ $value ] ) ) {
+            $options[ $value ] = $value;
+        }
+        echo '<div class="options_group">';
+        woocommerce_wp_select( [
+            'id'          => '_swi_merit_location_code',
+            'label'       => 'Merit Aktiva ladu',
+            'options'     => $options,
+            'value'       => $value,
+            'desc_tip'    => true,
+            'description' => 'Ladu, kust see toode Meriti arvel maha läheb. Kasutatakse ainult laokauba puhul.',
+        ] );
+        echo '</div>';
+    }
+
+    public function save_product_location_field( \WC_Product $product ): void {
+        if ( ! isset( $_POST['_swi_merit_location_code'] ) ) {
+            return;
+        }
+        $code = sanitize_text_field( wp_unslash( $_POST['_swi_merit_location_code'] ) );
+        if ( $code === '' ) {
+            $product->delete_meta_data( '_swi_merit_location_code' );
+        } else {
+            $product->update_meta_data( '_swi_merit_location_code', $code );
+        }
+    }
+
     public function handle_preview_invoice(): void {
         check_ajax_referer( 'my_nonce', 'security' );
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -1162,9 +1442,11 @@ class My_Simple_Ajax_Plugin {
         if ( ! $order ) {
             wp_send_json_error( [ 'error' => 'Orderit ei leitud.' ] );
         }
+        // Eelvaade ei tohi Meritis midagi luua (kliendikaart, tootekaart)
+        $this->dry_run = true;
         $payload = $this->build_payload_for_order( $order );
         if ( ! $payload ) {
-            wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
+            wp_send_json_error( [ 'error' => $this->last_error ?: 'Payload ehitus ebaõnnestus.' ] );
         }
         wp_send_json_success( [ 'payload' => $payload ] );
     }
@@ -1213,7 +1495,7 @@ class My_Simple_Ajax_Plugin {
         $order->save();
 
         $payload = $this->build_payload_for_order( $order );
-        if ( ! $payload ) wp_send_json_error( [ 'error' => 'Payload ehitus ebaõnnestus.' ] );
+        if ( ! $payload ) wp_send_json_error( [ 'error' => $this->last_error ?: 'Payload ehitus ebaõnnestus.' ] );
 
         $res = LocalApiClient::sendEncryptedOrder( $payload, 'merit' );
         if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {

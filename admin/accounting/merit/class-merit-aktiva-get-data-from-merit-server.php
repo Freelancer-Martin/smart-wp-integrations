@@ -182,6 +182,38 @@ class MeritServersDataClient {
     }
 
     /**
+     * Laadib Meriti aktiivsed laod ja salvestab need valikusse 'swi_merit_locations_cache'.
+     *
+     * Salvestatakse püsivalt (mitte transient), et seadete leht, toote- ja kategooriavaade
+     * saaksid valikuid näidata ilma igal lehelaadimisel Meriti poole pöördumata.
+     *
+     * @return array [['Code' => '1', 'Name' => 'Üldladu'], ...]
+     */
+    public function get_locations(): array {
+        $data      = $this->call( 'merit/locations' );
+        $locations = [];
+        foreach ( (array) ( $data['locations'] ?? [] ) as $loc ) {
+            if ( ! isset( $loc['Code'] ) || $loc['Code'] === '' ) continue;
+            $locations[] = [
+                'Code' => sanitize_text_field( (string) $loc['Code'] ),
+                'Name' => sanitize_text_field( (string) ( $loc['Name'] ?? '' ) ),
+            ];
+        }
+        update_option( 'swi_merit_locations_cache', $locations, false );
+        return $locations;
+    }
+
+    /**
+     * Leiab Meritist eraisiku kliendikaardi täpse nime järgi või loob uue.
+     *
+     * @param array $fields name, email, country_code, address, city, county, postal_code, phone, currency_code, payment_deadline.
+     * @return array ['customer_id' => string, 'created' => bool]
+     */
+    public function resolve_customer( array $fields ): array {
+        return $this->call_post( 'merit/customer/resolve', $fields );
+    }
+
+    /**
      * Märgib Meriti arve tasutuks (vt api.merit.ee sendpayment).
      *
      * @param string      $invoice_no    Arve number (nt 'WP123').
