@@ -453,27 +453,40 @@ class My_Simple_Ajax_Plugin {
      * @param string $new_status Uus staatus ilma 'wc-' prefiksita.
      */
     public function auto_send_order( int $order_id, string $old_status, string $new_status ): void {
+        // Diagnostika: iga vaikne väljumine kirjutab põhjuse debug.log-i (ainult WP_DEBUG korral),
+        // et oleks alati näha, miks tellimus automaatselt Meritisse ei läinud.
+        $skip = function ( string $why ) use ( $order_id, $old_status, $new_status ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( "SWI Merit auto-send #{$order_id} ({$old_status} → {$new_status}) vahele: {$why}" );
+            }
+        };
+
         if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+            $skip( 'Merit Aktiva pole lubatud' );
             return;
         }
 
         $configured = get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' );
         if ( 'wc-' . $new_status !== $configured ) {
+            $skip( "staatus wc-{$new_status} ≠ seadistatud {$configured}" );
             return;
         }
 
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
+            $skip( 'tellimust ei leitud' );
             return;
         }
 
         // HPOS-ühilduv meta-lugemine: get_meta() töötab nii vana postmeta kui uue wc_orders_meta tabeliga
         if ( $order->get_meta( '_swi_sent_merit' ) ) {
+            $skip( 'juba saadetud' );
             return;
         }
 
         $payload = $this->build_payload_for_order( $order );
         if ( ! $payload ) {
+            $skip( 'payload puudub — ' . ( $this->last_error ?: 'tundmatu põhjus' ) );
             return;
         }
 
