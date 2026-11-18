@@ -70,9 +70,6 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 [ 'name' => 'Arve eesliides',             'type' => 'text',     'id' => 'smart_wp_integtaion_arve_eesliides', 'default' => 'WP' ],
                 [ 'name' => 'Maksetähtaeg (päevades)',    'type' => 'text',     'id' => 'smart_wp_integtaion_maksetahtaeg',   'default' => '14' ],
                 [ 'name' => 'Saada tellimused staatuses', 'type' => 'select',   'id' => 'smart_wp_integtaion_invoice_status', 'options' => $s, 'default' => 'wc-completed' ],
-                [ 'name' => 'Vaikimisi käibemaksumäär', 'type' => 'select', 'id' => 'smart_wp_integtaion_maksumaar', 'options' => $this->merit_tax_options( (string) get_option( 'smart_wp_integtaion_maksumaar', '' ) ),
-                  'default' => '1e420e04-3dd7-46a5-b71f-0490779c2638',
-                  'desc' => 'Kasutatakse, kui rea määra ei leita Maksude kaardistusest ega seal pole vaikimisi rida. Valikud tulevad Meritist (Maksud → Lae Merit maksumäärad).' ],
                 [ 'name' => 'Arve ridade tüüp', 'type' => 'select', 'id' => 'smart_wp_integtaion_arve_ridade_tyyp', 'options' => [1=>'LaoKaup',2=>'Teenus',3=>'Kaup'], 'default' => 1 ],
                 [ 'type' => 'sectionend', 'id' => 'swi_merit' ],
             ];
@@ -513,6 +510,21 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                     <button type="button" id="swi-load-vatcodes-btn" class="button button-secondary">Lae Merit maksumäärad</button>
                                     <span id="swi-vatcodes-spinner" style="display:none;margin-left:8px;font-size:12px;color:#666;">Laen...</span>
                                 </p>
+                                <?php
+                                // Vaikimisi maks on ainult siin (üldseadete "Vaikimisi käibemaksumäär" eemaldatud).
+                                // Hoiatus, kui ükski kehtiv (GUID) rida pole vaikimisi märgitud.
+                                $has_default_tax = false;
+                                foreach ((array) get_option($this->opt_tax_map, []) as $tm) {
+                                    if (($tm['is_default'] ?? '') === 'yes' && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', (string) ($tm['uuid'] ?? ''))) {
+                                        $has_default_tax = true;
+                                        break;
+                                    }
+                                }
+                                if (!$has_default_tax) : ?>
+                                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400e;">
+                                    Märgi üks maks vaikimisi (Vaikimisi? = Jah) — seda kasutatakse, kui arverea KM määra kaardistusest ei leita. Vajadusel vajuta enne "Lae Merit maksumäärad".
+                                </div>
+                                <?php endif; ?>
                                 <?php $this->field_tax_map(['id'=>$this->opt_tax_map]); ?>
                             </div>
                             <?php

@@ -948,7 +948,8 @@ class My_Simple_Ajax_Plugin {
     }
 
     /**
-     * Vaikimisi maks: Maksude kaardistuse "Vaikimisi" rida, muidu üldseadete vaikimisi maksumäär.
+     * Vaikimisi maks: Maksude kaardistuse "Vaikimisi" rida. Varuna vana üldseade
+     * (smart_wp_integtaion_maksumaar — väli eemaldatud, väärtus jääb vanadele paigaldustele).
      * Vigased (mitte-GUID) väärtused jäetakse vahele — Merit nõuab TaxId GUID-i.
      */
     private function default_tax_id(): string {
