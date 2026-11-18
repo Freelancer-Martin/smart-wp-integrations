@@ -249,7 +249,10 @@ class My_Simple_Ajax_Plugin {
         } else {
             unset( $row['LocationCode'], $row['Item']['DefLocationCode'] );
         }
-        if ( $type !== 1 ) {
+        // ItemCostAmount jääb kreediitarve tooteridadele alati: Merit kasutab olemasoleva tootekaardi
+        // tüüpi (mitte meie saadetut) ja nõuab laokauba krediteerimisel omahinda
+        // ("Laokaubal … peab olema määratud omahind"). Teenuse ridadel seda pole.
+        if ( $type === 2 ) {
             unset( $row['ItemCostAmount'] );
         }
         return $row;
@@ -1334,7 +1337,10 @@ class My_Simple_Ajax_Plugin {
             $order->add_order_note( 'Merit Aktiva: kreediitarve ' . $payload['InvoiceNo'] . ' loodud.' );
             wp_send_json_success( [ 'message' => 'Kreediitarve loodud (' . $payload['InvoiceNo'] . ').' ] );
         } else {
-            wp_send_json_error( [ 'message' => $res['message'] ?? 'Kreediitarve loomine ebaõnnestus.' ] );
+            // Meriti enda põhjus (nt "Laokaubal … peab olema määratud omahind"), mitte üldine teade
+            $msg = swi_humanize_merit_error( $res );
+            $order->add_order_note( 'Merit Aktiva: kreediitarve ' . $payload['InvoiceNo'] . ' loomine ebaõnnestus — ' . $msg );
+            wp_send_json_error( [ 'message' => $msg ] );
         }
     }
 
