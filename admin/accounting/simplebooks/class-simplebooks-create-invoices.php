@@ -323,7 +323,7 @@ class SWI_Simplebooks_Create_Invoices {
             wp_send_json_error( [ 'error' => 'Simplebooks pole lubatud.' ] );
         }
 
-        $status = ltrim( get_option( 'swi_simplebooks_order_status', 'wc-completed' ), 'wc-' );
+        $status = preg_replace( '/^wc-/', '', (string) get_option( 'swi_simplebooks_order_status', 'wc-completed' ) );
         $all    = wc_get_orders( [ 'status' => $status, 'limit' => 200 ] );
         $orders = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_simplebooks' ) ), 0, 50 );
 
@@ -454,7 +454,7 @@ class SWI_Simplebooks_Create_Invoices {
             }
         }
 
-        $status = ltrim( get_option( 'swi_simplebooks_order_status', 'wc-completed' ), 'wc-' );
+        $status = preg_replace( '/^wc-/', '', (string) get_option( 'swi_simplebooks_order_status', 'wc-completed' ) );
         $prefix = get_option( 'swi_simplebooks_prefix', 'SB' );
         $orders = wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] );
 

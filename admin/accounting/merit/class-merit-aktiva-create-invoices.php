@@ -1524,10 +1524,31 @@ class My_Simple_Ajax_Plugin {
             wp_send_json_error( [ 'error' => 'Merit API viga: ' . $e->getMessage() ] );
         }
 
-        // Kõik WC orderid konfigureeritava staatusega
-        $status  = ltrim( get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' ), 'wc-' );
+        // Võrreldavad tellimused: seadistatud staatuses tellimused + kõik juba Meritisse saadetud
+        // tellimused (viimased 12 kuud) sõltumata praegusest staatusest — muidu kaoks staatuse seade
+        // muutmisel nimekirjast tellimus, mille arve Meritis kustutati.
+        // NB: ltrim($s, 'wc-') eemaldaks kõik algustähed w/c/- ('wc-completed' → 'ompleted').
+        $status  = preg_replace( '/^wc-/', '', (string) get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' ) );
         $prefix  = get_option( 'smart_wp_integtaion_arve_eesliides', '' );
-        $orders  = wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] );
+        $by_id   = [];
+        foreach ( wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] ) as $o ) {
+            $by_id[ $o->get_id() ] = $o;
+        }
+        $sent = wc_get_orders( [
+            'limit'        => -1,
+            'status'       => array_keys( wc_get_order_statuses() ),
+            'date_created' => '>' . strtotime( '-12 months' ),
+            'meta_query'   => [
+                'relation' => 'OR',
+                [ 'key' => '_swi_sent_merit', 'compare' => 'EXISTS' ],
+                [ 'key' => '_swi_merit_invoice_no', 'compare' => 'EXISTS' ],
+            ],
+        ] );
+        foreach ( $sent as $o ) {
+            $by_id[ $o->get_id() ] = $o;
+        }
+        krsort( $by_id );
+        $orders = array_values( $by_id );
 
         $rows = [];
         foreach ( $orders as $order ) {
