@@ -364,6 +364,10 @@ function swi_do_simplebooks_retry(): void {
 		if ( $count >= 3 ) {
 			$order->delete_meta_data( '_swi_simplebooks_retry' );
 			$order->delete_meta_data( '_swi_simplebooks_retry_count' );
+			// Loobume — märge jääb, et saatmata tellimuste kontroll ei alustaks ringi otsast
+			if ( ! $order->get_meta( '_swi_simplebooks_send_error' ) ) {
+				$order->update_meta_data( '_swi_simplebooks_send_error', 'Automaatne uuesti saatmine ebaõnnestus 3 korda — vaata tellimuse märkusi.' );
+			}
 			$order->save();
 			continue;
 		}
@@ -384,6 +388,7 @@ function swi_do_simplebooks_retry(): void {
 
 		if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
 			$order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+			$order->delete_meta_data( '_swi_simplebooks_send_error' );
 			$order->delete_meta_data( '_swi_simplebooks_retry' );
 			$order->delete_meta_data( '_swi_simplebooks_retry_count' );
 			$order->save();
@@ -394,6 +399,7 @@ function swi_do_simplebooks_retry(): void {
 		} else {
 			$msg = $res['message'] ?? wp_json_encode( $res );
 			$order->update_meta_data( '_swi_simplebooks_retry_count', $count + 1 );
+			$order->update_meta_data( '_swi_simplebooks_send_error', mb_substr( (string) $msg, 0, 300 ) );
 			$order->save();
 			$order->add_order_note( 'Simplebooks: automaatne uuesti saatmine ebaõnnestus (katse ' . ( $count + 1 ) . ') — ' . $msg );
 			if ( function_exists( 'swi_sb_log_send_history' ) ) {

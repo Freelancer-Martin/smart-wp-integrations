@@ -83,7 +83,29 @@ class SWI_Simplebooks_Create_Invoices {
         if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) return;
 
         $status = get_option( 'swi_simplebooks_order_status', 'wc-completed' );
-        $orders = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+
+        // Ainult tellimused pärast kontrolli esimest käivitust (vanu ei saadeta massiliselt) ja ilma
+        // korduskatse/loobumise märgita — varem võttis kontroll loobutud tellimuse iga 10 min uuesti
+        // ette ja korduskatse ring algas otsast (#44: 170 märget).
+        $since = (int) get_option( 'swi_sb_sweep_since', 0 );
+        if ( ! $since ) {
+            $since = time();
+            update_option( 'swi_sb_sweep_since', $since, false );
+        }
+        $orders = wc_get_orders( [
+            'type'         => 'shop_order',
+            'limit'        => 20,
+            'status'       => $status,
+            'orderby'      => 'id',
+            'order'        => 'ASC',
+            'date_created' => $since . '...' . ( time() - 120 ),
+            'meta_query'   => [
+                'relation' => 'AND',
+                [ 'key' => '_swi_sent_simplebooks', 'compare' => 'NOT EXISTS' ],
+                [ 'key' => '_swi_simplebooks_retry', 'compare' => 'NOT EXISTS' ],
+                [ 'key' => '_swi_simplebooks_send_error', 'compare' => 'NOT EXISTS' ],
+            ],
+        ] );
 
         foreach ( $orders as $order ) {
             if ( $order->get_meta( '_swi_sent_simplebooks' ) ) continue;
@@ -94,6 +116,7 @@ class SWI_Simplebooks_Create_Invoices {
             $res = LocalApiClient::sendEncryptedOrder( $payload, 'simplebooks' );
             if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
                 $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
                 $order->delete_meta_data( '_swi_simplebooks_retry' );
                 $order->delete_meta_data( '_swi_simplebooks_retry_count' );
                 $order->save();
@@ -256,18 +279,23 @@ class SWI_Simplebooks_Create_Invoices {
         if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) return;
 
         $stuck = wc_get_orders( [
+            'type'       => 'shop_order',
             'limit'      => 5,
             'meta_query' => [
                 'relation' => 'AND',
-                [ 'key' => '_swi_simplebooks_retry_count', 'value' => 3, 'compare' => '>=', 'type' => 'NUMERIC' ],
                 [ 'key' => '_swi_sent_simplebooks', 'compare' => 'NOT EXISTS' ],
+                [
+                    'relation' => 'OR',
+                    [ 'key' => '_swi_simplebooks_retry_count', 'value' => 3, 'compare' => '>=', 'type' => 'NUMERIC' ],
+                    [ 'key' => '_swi_simplebooks_send_error', 'compare' => 'EXISTS' ],
+                ],
             ],
         ] );
 
         if ( empty( $stuck ) ) return;
 
         $ids = implode( ', ', array_map( fn( $o ) => '#' . $o->get_id(), $stuck ) );
-        $url = admin_url( 'admin.php?page=wc-settings&tab=checkout&section=smart_wp_integrations&swi_tab=simplebooks' );
+        $url = admin_url( 'admin.php?page=wc-settings&tab=smart_wp_integration' );
         echo '<div class="notice notice-error is-dismissible"><p>'
             . '<strong>Smart WP Integrations:</strong> '
             . count( $stuck ) . ' Simplebooks arvet ei õnnestunud saata (3/3 katset läbi): '
@@ -298,6 +326,7 @@ class SWI_Simplebooks_Create_Invoices {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
             $order->delete_meta_data( '_swi_simplebooks_retry' );
             $order->delete_meta_data( '_swi_simplebooks_retry_count' );
             $order->save();
@@ -342,6 +371,7 @@ class SWI_Simplebooks_Create_Invoices {
 
             if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
                 $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
                 $order->save();
                 $order->add_order_note( 'Simplebooks: arve edastatud hulga sünkroniseerimisega.' );
                 swi_sb_log_send_history( $order->get_id(), 'ok', 'Hulga saatmine: ' . $payload['number'] );
@@ -394,6 +424,7 @@ class SWI_Simplebooks_Create_Invoices {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
             $order->save();
             $order->add_order_note( 'Simplebooks: arve edastatud.' );
             swi_sb_log_send_history( $order_id, 'ok', 'Arve edastatud: ' . ( $payload['number'] ?? '' ) );
@@ -503,6 +534,7 @@ class SWI_Simplebooks_Create_Invoices {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
             $order->save();
             $order->add_order_note( 'Simplebooks: arve edastatud käsitsi (sync).' );
             swi_sb_log_send_history( $order_id, 'ok', 'Käsitsi sünkroniseerimine: ' . $payload['number'] );
@@ -547,6 +579,7 @@ class SWI_Simplebooks_Create_Invoices {
 
         if ( isset( $res['status'] ) && in_array( $res['status'], [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_simplebooks', current_time( 'mysql' ) );
+            $order->delete_meta_data( '_swi_simplebooks_send_error' );
             $order->save();
             $order->add_order_note( 'Simplebooks: arve edastatud käsitsi tööriistad paneelist.' );
             swi_sb_log_send_history( $order_id, 'ok', 'Käsitsi saatmine: ' . $payload['number'] );
