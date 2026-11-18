@@ -3839,14 +3839,22 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
         public function field_country_map( $value ) {
             $key = $value['id']; $stored = (array)get_option($key,[]);
             $countries = new WC_Countries();
-            echo '<table class="widefat" style="margin:0;"><thead><tr><th>Riik</th><th>VAT kood</th><th>Nimetus</th><th>Vaikimisi?</th></tr></thead><tbody>';
+            // VAT kood = Meriti maks rippmenüüst (Meritist laaditud maksud), mitte käsitsi kleebitud GUID
+            $vat_select = function ($name, $current) {
+                $html = '<select name="' . esc_attr($name) . '" style="max-width:260px;">';
+                foreach ($this->merit_tax_options((string) $current, ['' => '— rea määra järgi —']) as $id => $label) {
+                    $html .= '<option value="' . esc_attr($id) . '" ' . selected((string) $current, (string) $id, false) . '>' . esc_html($label) . '</option>';
+                }
+                return $html . '</select>';
+            };
+            echo '<table class="widefat" style="margin:0;"><thead><tr><th>Riik</th><th>Meriti maks</th><th>Nimetus</th><th>Vaikimisi?</th></tr></thead><tbody>';
             if (empty($stored)) $stored = [uniqid('r_')=>['country'=>'','vat_code'=>'','name'=>'','default'=>'']];
             foreach ($stored as $rk => $row) {
                 echo '<tr><td><select name="'.esc_attr($key).'['.esc_attr($rk).'][country]"><option value="">— riik —</option>';
                 foreach ($countries->get_countries() as $code => $label)
                     printf('<option value="%s" %s>%s</option>',esc_attr($code),selected(($row['country']??'')===$code,true,false),esc_html($label));
                 echo '</select></td>';
-                printf('<td><input type="text" name="%1$s[%2$s][vat_code]" value="%3$s"></td>',esc_attr($key),esc_attr($rk),esc_attr($row['vat_code']??''));
+                echo '<td>' . $vat_select($key . '[' . $rk . '][vat_code]', $row['vat_code'] ?? '') . '</td>';
                 printf('<td><input type="text" name="%1$s[%2$s][name]" value="%3$s"></td>',esc_attr($key),esc_attr($rk),esc_attr($row['name']??''));
                 echo '<td><select name="'.esc_attr($key).'['.esc_attr($rk).'][default]"><option value="">Ei</option><option value="yes" '.selected(($row['default']??'')==='yes',true,false).'>Jah</option></select></td></tr>';
             }
@@ -3854,7 +3862,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
             echo '<tr><td><select name="'.esc_attr($key).'['.esc_attr($new).'][country]"><option value="">— lisa uus —</option>';
             foreach ($countries->get_countries() as $code => $label) printf('<option value="%s">%s</option>',esc_attr($code),esc_html($label));
             echo '</select></td>';
-            printf('<td><input type="text" name="%1$s[%2$s][vat_code]" value=""></td>',esc_attr($key),esc_attr($new));
+            echo '<td>' . $vat_select($key . '[' . $new . '][vat_code]', '') . '</td>';
             printf('<td><input type="text" name="%1$s[%2$s][name]" value=""></td>',esc_attr($key),esc_attr($new));
             echo '<td><select name="'.esc_attr($key).'['.esc_attr($new).'][default]"><option value="">Ei</option><option value="yes">Jah</option></select></td></tr>';
             echo '</tbody></table>';
