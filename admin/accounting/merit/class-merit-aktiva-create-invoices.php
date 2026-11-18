@@ -1240,10 +1240,17 @@ class My_Simple_Ajax_Plugin {
         if ( in_array( $res['status'] ?? '', [ 'ok', 'queued' ], true ) ) {
             $order->update_meta_data( '_swi_sent_merit', current_time( 'mysql' ) );
             $order->delete_meta_data( '_swi_merit_retry' );
+            $order->delete_meta_data( '_swi_merit_send_error' );
             $order->save();
+            $order->add_order_note( 'Merit Aktiva: arve ' . $payload['InvoiceNo'] . ' edastatud käsitsi (tellimuse kastist).' );
+            swi_log_send_history( $order->get_id(), 'ok', 'Käsitsi saatmine: ' . ( $res['message'] ?? $res['status'] ) );
             wp_send_json_success( [ 'message' => 'Saadetud.' ] );
         } else {
-            wp_send_json_error( [ 'message' => $res['message'] ?? 'Saatmine ebaõnnestus.' ] );
+            $msg = swi_humanize_merit_error( $res );
+            $order->add_order_note( 'Merit Aktiva: käsitsi saatmine ebaõnnestus — ' . $msg );
+            swi_merit_set_send_error( $order, $msg );
+            swi_log_send_history( $order->get_id(), 'error', 'Käsitsi saatmine: ' . $msg );
+            wp_send_json_error( [ 'message' => $msg ] );
         }
     }
 
