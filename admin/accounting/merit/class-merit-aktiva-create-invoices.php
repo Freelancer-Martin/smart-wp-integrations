@@ -1112,7 +1112,14 @@ class My_Simple_Ajax_Plugin {
             $product  = $item->get_product();
             $sku      = $product ? $product->get_sku() : '';
             $qty_raw  = (int) $item->get_quantity();
-            $qty      = $qty_raw !== 0 ? $qty_raw : 1;
+            // Kogus 0: refundis ainult rea summa (WooCommerce'i "Refund amount" on lukus, summa
+            // sisestatakse rea tagastussumma väljale). Kreediitarvel peab kogus olema negatiivne ja
+            // hind positiivne → -1 × summa. Tavatellimusel jääb varasem käitumine (1).
+            if ( $qty_raw !== 0 ) {
+                $qty = $qty_raw;
+            } else {
+                $qty = ( $order instanceof \WC_Order_Refund || (float) $item->get_total() < 0 ) ? -1 : 1;
+            }
             // Ühikuhind = kogusumma / kogus (neto, käibemaksuta) — 4 kümnendkohta täpsuse säilitamiseks
             $price_ex = round( (float) $item->get_total() / $qty, 4 );
             $tax_uuid = $vat_code_override ?: $this->resolve_vat_uuid( $this->item_tax_rate( $item ) );
