@@ -190,6 +190,10 @@ function swi_do_retry_failed_orders(): void {
 		if ( $count >= 3 ) {
 			$order->delete_meta_data( '_swi_merit_retry' );
 			$order->delete_meta_data( '_swi_merit_retry_count' );
+			// Loobume — jäta põhjus tellimusele, et admin-teade seda näitaks
+			if ( ! $order->get_meta( '_swi_merit_send_error' ) ) {
+				$order->update_meta_data( '_swi_merit_send_error', 'Automaatne uuesti saatmine ebaõnnestus 3 korda — vaata tellimuse märkusi.' );
+			}
 			$order->save();
 			continue;
 		}
@@ -227,6 +231,7 @@ function swi_do_retry_failed_orders(): void {
 			}
 		} else {
 			$msg = function_exists( 'swi_humanize_merit_error' ) ? swi_humanize_merit_error( $res ) : ( $res['message'] ?? wp_json_encode( $res ) );
+			$order->update_meta_data( '_swi_merit_send_error', $msg );
 
 			// Erijuhtum: Merit ütleb "Korduv arve number" — tähendab arve on seal juba olemas.
 			// Sel juhul pole uuesti saatmine mõttekas, märgime orderit saadetuna.

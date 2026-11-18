@@ -97,6 +97,9 @@ class My_Simple_Ajax_Plugin {
         add_filter( 'handle_bulk_actions-woocommerce_page_wc-orders', [ $this, 'handle_bulk_action' ], 10, 3 );
         add_action( 'admin_notices', [ $this, 'show_bulk_action_notice' ] );
 
+        // Admin-teade: tellimused, mida ei õnnestunud Meritisse saata (nagu Smart Accountsil)
+        add_action( 'admin_notices', [ $this, 'show_failed_notice' ] );
+
         // Laoseisu sünkroonimine Meritist (seade: Laod → Laoseisu sünkroonimine), iga tund
         add_action( 'wp_ajax_swi_merit_sync_stock', [ $this, 'handle_sync_stock' ] );
         add_action( 'swi_merit_stock_cron', [ $this, 'sync_stock_from_merit' ] );
@@ -424,6 +427,7 @@ class My_Simple_Ajax_Plugin {
                 $order->update_meta_data( '_swi_merit_retry', '1' );
                 $order->update_meta_data( '_swi_merit_retry_count', $count );
                 $order->save();
+                swi_merit_set_send_error( $order, swi_humanize_merit_error( $res ) );
                 swi_log_send_history( $order->get_id(), 'error', 'Cron ebaõnnestus (katse ' . $count . '): ' . ( $res['message'] ?? 'Tundmatu viga' ) );
             }
 
@@ -502,6 +506,7 @@ class My_Simple_Ajax_Plugin {
         } else {
             $msg = swi_humanize_merit_error( $res );
             $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
+            swi_merit_set_send_error( $order, $msg );
             error_log( 'SWI Merit auto-send failed order ' . $order_id . ': ' . wp_json_encode( $res ) );
             // Märgi retry — cron üritab uuesti iga 10 min, max 3 korda
             $order->update_meta_data( '_swi_merit_retry', '1' );
@@ -1697,12 +1702,56 @@ class My_Simple_Ajax_Plugin {
             } else {
                 $msg = swi_humanize_merit_error( $res );
                 $order->add_order_note( 'Merit Aktiva: edastamine ebaõnnestus — ' . $msg );
+                swi_merit_set_send_error( $order, $msg );
                 swi_log_send_history( $order_id, 'error', 'Massiline saatmine: ' . $msg );
                 $fail++;
             }
             usleep( 300000 ); // Meriti päringulimiit
         }
         return add_query_arg( [ 'swi_merit_bulk' => $ok . '-' . $fail . '-' . $skip ], $redirect_url );
+    }
+
+    /**
+     * Admin-teade tellimustest, mida ei õnnestunud Meritisse saata: valideerimisviga
+     * (_swi_merit_build_error, nt KM ei klapi) või saatmisviga (_swi_merit_send_error).
+     * Kaob, kui arve on saadetud (_swi_sent_merit).
+     */
+    public function show_failed_notice(): void {
+        if ( ! current_user_can( 'manage_woocommerce' ) || get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
+            return;
+        }
+        $ids = wc_get_orders( [
+            'limit'      => 50,
+            'return'     => 'ids',
+            'meta_query' => [
+                'relation' => 'AND',
+                [ 'key' => '_swi_sent_merit', 'compare' => 'NOT EXISTS' ],
+                [
+                    'relation' => 'OR',
+                    [ 'key' => '_swi_merit_build_error', 'compare' => 'EXISTS' ],
+                    [ 'key' => '_swi_merit_send_error', 'compare' => 'EXISTS' ],
+                ],
+            ],
+        ] );
+        if ( empty( $ids ) ) {
+            return;
+        }
+
+        $items = [];
+        foreach ( array_slice( $ids, 0, 5 ) as $id ) {
+            $order = wc_get_order( $id );
+            if ( ! $order ) continue;
+            $why = (string) ( $order->get_meta( '_swi_merit_build_error' ) ?: $order->get_meta( '_swi_merit_send_error' ) );
+            if ( mb_strlen( $why ) > 110 ) $why = mb_substr( $why, 0, 107 ) . '…';
+            $items[] = '<li><a href="' . esc_url( $order->get_edit_order_url() ) . '">#' . (int) $id . '</a> — ' . esc_html( $why ) . '</li>';
+        }
+        $more = count( $ids ) > 5 ? '<li>… ja veel ' . ( count( $ids ) - 5 ) . '</li>' : '';
+        $url  = admin_url( 'admin.php?page=wc-settings&tab=smart_wp_integration' );
+
+        echo '<div class="notice notice-error"><p><strong>Merit Aktiva:</strong> '
+            . count( $ids ) . ' tellimust ei saanud saata. Paranda põhjus ja saada uuesti (tellimuse Meriti kastist, massilise toiminguga või '
+            . '<a href="' . esc_url( $url ) . '">Merit Aktiva → Üldseaded → Sünkroniseerimine</a>).</p>'
+            . '<ul style="margin:0 0 8px 18px;list-style:disc;">' . implode( '', $items ) . $more . '</ul></div>';
     }
 
     public function show_bulk_action_notice(): void {
@@ -1912,6 +1961,15 @@ function swi_humanize_merit_error( array $res ): string {
  * @param string $status   'ok' kui edukas, 'error' kui ebaõnnestus.
  * @param string $message  Kirjeldus (salvestatakse max 200 märki).
  */
+/**
+ * Jätab tellimusele Meritisse saatmise vea põhjuse (admin-teate jaoks). Kustub mõjult, kui
+ * arve on saadetud — teade näitab ainult saatmata tellimusi.
+ */
+function swi_merit_set_send_error( \WC_Order $order, string $message ): void {
+    $order->update_meta_data( '_swi_merit_send_error', $message !== '' ? $message : 'Tundmatu viga' );
+    $order->save();
+}
+
 function swi_log_send_history( int $order_id, string $status, string $message ): void {
     $history = (array) get_option( 'swi_send_history', [] );
     // array_unshift lisab uusima kirje massiivi algusesse (viimane esmalt järjekord)

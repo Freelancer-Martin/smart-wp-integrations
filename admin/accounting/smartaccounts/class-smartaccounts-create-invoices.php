@@ -242,7 +242,7 @@ class SWI_SmartAccounts_Create_Invoices {
         if ( empty( $stuck ) ) return;
 
         $ids = implode( ', ', array_map( fn( $o ) => '#' . $o->get_id(), $stuck ) );
-        $url = admin_url( 'admin.php?page=wc-settings&tab=checkout&section=smart_wp_integrations&swi_tab=smartaccounts' );
+        $url = admin_url( 'admin.php?page=wc-settings&tab=smart_wp_integration' );
         echo '<div class="notice notice-error is-dismissible"><p>'
             . '<strong>Smart Accounts:</strong> ' . count( $stuck ) . ' tellimust ei saanud saata (orderid: ' . esc_html( $ids ) . '). '
             . '<a href="' . esc_url( $url ) . '">Vaata Tööriistad paneelist</a>.'
