@@ -72,7 +72,105 @@ add_filter( 'cron_schedules', function ( array $schedules ): array {
 			'display'  => 'Iga 10 minuti järel (Smart WP Integrations)',
 		];
 	}
+	if ( ! isset( $schedules['swi_10min'] ) ) {
+		$schedules['swi_10min'] = [ 'interval' => 600, 'display' => 'Iga 10 minuti järel' ];
+	}
 	return $schedules;
+} );
+
+/**
+ * Plugina taustatööd: hook => [intervall sekundites, WP-Cron'i ajakava nimi].
+ *
+ * Ainult lubatud moodulite tööd — keelatud mooduli töö eemaldatakse ajastusest.
+ */
+function swi_background_jobs(): array {
+	$jobs = [ 'swi_retry_failed_orders' => [ 600, 'swi_every_10min' ] ];
+	if ( get_option( 'smart_wp_integtaion_enable' ) === 'yes' ) {
+		$jobs['swi_merit_cron_send'] = [ 600, 'swi_10min' ];
+		if ( get_option( 'swi_merit_stock_sync' ) === 'yes' ) {
+			$jobs['swi_merit_stock_cron'] = [ 3600, 'hourly' ];
+		}
+	}
+	foreach ( [ 'swi_simplebooks_enable' => 'swi_sb_cron_send', 'swi_erply_enable' => 'swi_erply_cron_send', 'swi_stdb_enable' => 'swi_stdb_cron_send' ] as $opt => $hook ) {
+		if ( get_option( $opt ) === 'yes' ) {
+			$jobs[ $hook ] = [ 600, 'swi_10min' ];
+		}
+	}
+	return $jobs;
+}
+
+/** Kõik taustatööde hookid (ka keelatud moodulite omad) — ajastuse koristamiseks. */
+function swi_all_background_hooks(): array {
+	return [ 'swi_retry_failed_orders', 'swi_merit_cron_send', 'swi_merit_stock_cron', 'swi_sb_cron_send', 'swi_erply_cron_send', 'swi_stdb_cron_send' ];
+}
+
+/**
+ * Taustatööd: WP-Cron on põhiline, WooCommerce'i Action Scheduler varu.
+ *
+ * WP-Cron ei käivitu, kui saidil on DISABLE_WP_CRON ilma süsteemse cron'ita, või kui ajastus
+ * nihkus (nt serveri kell oli ees). Action Scheduler (WooCommerce'iga kaasas) töötab ka siis —
+ * see käivitab tööd admin-lehtede laadimisel taustapäringuga. Kumbki käivitaja märgib töö
+ * käivitusaja; varu käivitab töö ainult siis, kui WP-Cron pole seda 1,5 intervalli jooksul teinud.
+ */
+add_action( 'init', 'swi_ensure_background_jobs', 20 );
+function swi_ensure_background_jobs(): void {
+	// Kontroll ei pea igal lehelaadimisel jooksma
+	if ( get_transient( 'swi_jobs_ensured' ) ) {
+		return;
+	}
+	set_transient( 'swi_jobs_ensured', 1, 5 * MINUTE_IN_SECONDS );
+
+	$jobs = swi_background_jobs();
+	$as   = function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_schedule_recurring_action' );
+
+	foreach ( swi_all_background_hooks() as $hook ) {
+		if ( ! isset( $jobs[ $hook ] ) ) {
+			// Moodul keelatud — eemalda nii WP-Cron'ist kui varust
+			wp_clear_scheduled_hook( $hook );
+			if ( $as ) {
+				as_unschedule_all_actions( 'swi_job_backup', [ $hook ], 'smart-wp-integrations' );
+			}
+			continue;
+		}
+		[ $interval, $schedule ] = $jobs[ $hook ];
+
+		// WP-Cron: puuduv ajastus → lisa; liiga kaugel tulevikus (kella nihe) → ajasta ümber
+		$next = wp_next_scheduled( $hook );
+		if ( $next && $next > time() + 2 * $interval ) {
+			wp_clear_scheduled_hook( $hook );
+			$next = false;
+		}
+		if ( ! $next ) {
+			wp_schedule_event( time() + 60, $schedule, $hook );
+		}
+
+		// Action Scheduler varu
+		if ( $as && ! as_has_scheduled_action( 'swi_job_backup', [ $hook ], 'smart-wp-integrations' ) ) {
+			as_schedule_recurring_action( time() + $interval, $interval, 'swi_job_backup', [ $hook ], 'smart-wp-integrations' );
+		}
+	}
+}
+
+// Iga töö märgib oma käivitusaja (prioriteet 0 — enne töö enda callback'e)
+foreach ( swi_all_background_hooks() as $swi_job_hook ) {
+	add_action( $swi_job_hook, function () use ( $swi_job_hook ) {
+		update_option( 'swi_job_last_' . $swi_job_hook, time(), false );
+	}, 0 );
+}
+unset( $swi_job_hook );
+
+// Action Scheduler'i varu: käivita töö ainult siis, kui WP-Cron pole seda õigel ajal teinud
+add_action( 'swi_job_backup', function ( $hook ) {
+	$jobs = swi_background_jobs();
+	if ( ! is_string( $hook ) || ! isset( $jobs[ $hook ] ) ) {
+		return;
+	}
+	$last = (int) get_option( 'swi_job_last_' . $hook, 0 );
+	if ( time() - $last < 1.5 * $jobs[ $hook ][0] ) {
+		return; // WP-Cron töötab, varu pole vaja
+	}
+	error_log( "SWI: WP-Cron ei käivitanud tööd {$hook} õigel ajal — käivitan Action Scheduleriga." );
+	do_action( $hook );
 } );
 
 /**
@@ -94,38 +192,13 @@ register_activation_hook( __FILE__, function () {
  * mis põhjustaks PHP-vigu puuduvate klasside tõttu.
  */
 register_deactivation_hook( __FILE__, function () {
-	wp_clear_scheduled_hook( 'swi_retry_failed_orders' );
-} );
-
-/**
- * Parandab cron intervalli käituse ajal, kui vana intervall ei ole 600 sekundit.
- *
- * Kui plugin uuendati (nt vana versioon kasutas 'hourly'), siis selle koodiga
- * asendatakse vale intervall automaatselt õigega ilma käsitsi sekkumata.
- * _get_cron_array() annab juurdepääsu WP cron-tabelile kõigi registreeritud ülesannetega.
- */
-add_action( 'admin_init', function () {
-	$next = wp_next_scheduled( 'swi_retry_failed_orders' );
-	if ( $next ) {
-		$crons    = _get_cron_array();
-		$interval = 0;
-		// Otsi konkreetse ülesande tegelik intervall cron-tabelist
-		foreach ( $crons as $timestamp => $jobs ) {
-			if ( isset( $jobs['swi_retry_failed_orders'] ) ) {
-				foreach ( $jobs['swi_retry_failed_orders'] as $job ) {
-					$interval = $job['interval'] ?? 0;
-				}
-			}
-		}
-		// Kui intervall ei ole 600 sekundit, ajakohasta
-		if ( $interval !== 600 ) {
-			wp_clear_scheduled_hook( 'swi_retry_failed_orders' );
-			wp_schedule_event( time(), 'swi_every_10min', 'swi_retry_failed_orders' );
-		}
-	} else {
-		// Cron pole üldse ajastatud — lisa see (juhtub nt pärast WP cron-tabeli lähtestamist)
-		wp_schedule_event( time(), 'swi_every_10min', 'swi_retry_failed_orders' );
+	foreach ( swi_all_background_hooks() as $hook ) {
+		wp_clear_scheduled_hook( $hook );
 	}
+	if ( function_exists( 'as_unschedule_all_actions' ) ) {
+		as_unschedule_all_actions( 'swi_job_backup' );
+	}
+	delete_transient( 'swi_jobs_ensured' );
 } );
 
 // Seo cron-sündmus konkreetse callback-funktsiooniga

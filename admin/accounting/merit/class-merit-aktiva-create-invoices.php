@@ -103,13 +103,7 @@ class My_Simple_Ajax_Plugin {
         // Laoseisu sünkroonimine Meritist (seade: Laod → Laoseisu sünkroonimine), iga tund
         add_action( 'wp_ajax_swi_merit_sync_stock', [ $this, 'handle_sync_stock' ] );
         add_action( 'swi_merit_stock_cron', [ $this, 'sync_stock_from_merit' ] );
-        $stock_on = get_option( 'swi_merit_stock_sync' ) === 'yes';
-        $next     = wp_next_scheduled( 'swi_merit_stock_cron' );
-        if ( $stock_on && ! $next ) {
-            wp_schedule_event( time() + 300, 'hourly', 'swi_merit_stock_cron' );
-        } elseif ( ! $stock_on && $next ) {
-            wp_unschedule_event( $next, 'swi_merit_stock_cron' );
-        }
+        // Ajastamine (WP-Cron + Action Scheduler varu): swi_ensure_background_jobs() põhifailis
 
         // Automaatne hook — saadab orderi serverisse kui staatus muutub
         add_action( 'woocommerce_order_status_changed', [ $this, 'auto_send_order' ], 10, 3 );
@@ -117,9 +111,6 @@ class My_Simple_Ajax_Plugin {
         // Cron: registreeri 10-minutiline intervall ja ajakava
         add_filter( 'cron_schedules', [ $this, 'add_cron_interval' ] );
         add_action( 'swi_merit_cron_send', [ $this, 'cron_send_orders' ] );
-        if ( ! wp_next_scheduled( 'swi_merit_cron_send' ) ) {
-            wp_schedule_event( time(), 'swi_10min', 'swi_merit_cron_send' );
-        }
 
         // Kõik seaded loetakse üks kord konstruktoris, mitte iga meetodi kutsumise ajal
         $this->tax_field        = get_option( 'smart_wp_integtaion_maksumaar' );
@@ -415,7 +406,30 @@ class My_Simple_Ajax_Plugin {
         if ( get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) return;
 
         $status = get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' );
-        $orders = wc_get_orders( [ 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+
+        // Saadame ainult tellimusi, mis on loodud pärast selle kontrolli esimest käivitust —
+        // muidu saadaks plugin uues poes kõik vanad tellimused korraga Meritisse.
+        $since = (int) get_option( 'swi_merit_sweep_since', 0 );
+        if ( ! $since ) {
+            $since = time();
+            update_option( 'swi_merit_sweep_since', $since, false );
+        }
+
+        $orders = wc_get_orders( [
+            'limit'        => 20,
+            'status'       => $status,
+            'orderby'      => 'id',
+            'order'        => 'ASC',
+            // Värskeid (alla 2 min) ei puutu — kassa auto-saatmine võib veel käia
+            'date_created' => $since . '...' . ( time() - 120 ),
+            'meta_query'   => [
+                'relation' => 'AND',
+                [ 'key' => '_swi_sent_merit', 'compare' => 'NOT EXISTS' ],
+                [ 'key' => '_swi_merit_deleted', 'compare' => 'NOT EXISTS' ],   // arve kustutati teadlikult
+                [ 'key' => '_swi_merit_retry', 'compare' => 'NOT EXISTS' ],     // korduskatse cron tegeleb
+                [ 'key' => '_swi_merit_send_error', 'compare' => 'NOT EXISTS' ], // loobutud — admin-teade
+            ],
+        ] );
 
         foreach ( $orders as $order ) {
             if ( $order->get_meta( '_swi_sent_merit' ) ) continue;
@@ -829,6 +843,10 @@ class My_Simple_Ajax_Plugin {
         // sama numbrit ka siis, kui eesliidet hiljem muudetakse (eelvaade numbrit ei salvesta)
         if ( ! $this->dry_run && $order->get_meta( '_swi_merit_invoice_no' ) === '' ) {
             $order->update_meta_data( '_swi_merit_invoice_no', $payload['InvoiceNo'] );
+            $order->save();
+        }
+        if ( ! $this->dry_run && $order->get_meta( '_swi_merit_deleted' ) ) {
+            $order->delete_meta_data( '_swi_merit_deleted' );
             $order->save();
         }
 
@@ -1389,7 +1407,9 @@ class My_Simple_Ajax_Plugin {
 
         $order->delete_meta_data( '_swi_sent_merit' );
         $order->delete_meta_data( '_swi_merit_payment_sent' );
-        $order->add_order_note( 'Merit Aktiva: arve ' . $invoice_no . ' kustutatud Meritist.' );
+        // Teadlikult kustutatud arvet automaatne kontroll tagasi ei saada — ainult käsitsi
+        $order->update_meta_data( '_swi_merit_deleted', current_time( 'mysql' ) );
+        $order->add_order_note( 'Merit Aktiva: arve ' . $invoice_no . ' kustutatud Meritist. Automaatselt uuesti ei saadeta — vajadusel saada käsitsi.' );
         $order->save();
 
         wp_send_json_success( [ 'message' => 'Arve kustutatud Meritist.' ] );
