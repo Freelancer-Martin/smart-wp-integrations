@@ -418,7 +418,7 @@ class My_Simple_Ajax_Plugin {
             update_option( 'swi_merit_sweep_since', $since, false );
         }
 
-        $orders = wc_get_orders( [
+        $orders = wc_get_orders( [ 'type' => 'shop_order',
             'limit'        => 20,
             'status'       => $status,
             'orderby'      => 'id',
@@ -567,7 +567,7 @@ class My_Simple_Ajax_Plugin {
             return [];
         }
 
-        $orders  = wc_get_orders( [ 'limit' => -1 ] );
+        $orders  = wc_get_orders( [ 'type' => 'shop_order', 'limit' => -1 ] );
         $results = [];
         try {
             $merit_server_invoices = new MeritServersDataClient();
@@ -1544,10 +1544,10 @@ class My_Simple_Ajax_Plugin {
         $status  = preg_replace( '/^wc-/', '', (string) get_option( 'smart_wp_integtaion_invoice_status', 'wc-completed' ) );
         $prefix  = get_option( 'smart_wp_integtaion_arve_eesliides', '' );
         $by_id   = [];
-        foreach ( wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] ) as $o ) {
+        foreach ( wc_get_orders( [ 'type' => 'shop_order', 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] ) as $o ) {
             $by_id[ $o->get_id() ] = $o;
         }
-        $sent = wc_get_orders( [
+        $sent = wc_get_orders( [ 'type' => 'shop_order',
             'limit'        => -1,
             'status'       => array_keys( wc_get_order_statuses() ),
             'date_created' => '>' . strtotime( '-12 months' ),
@@ -1791,7 +1791,7 @@ class My_Simple_Ajax_Plugin {
         if ( ! current_user_can( 'manage_woocommerce' ) || get_option( 'smart_wp_integtaion_enable' ) !== 'yes' ) {
             return;
         }
-        $ids = wc_get_orders( [
+        $ids = wc_get_orders( [ 'type' => 'shop_order',
             'limit'      => 50,
             'return'     => 'ids',
             'meta_query' => [

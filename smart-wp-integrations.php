@@ -245,7 +245,7 @@ function swi_do_retry_failed_orders(): void {
 		return;
 	}
 
-	$orders = wc_get_orders( [
+	$orders = wc_get_orders( [ 'type' => 'shop_order',
 		'limit'      => 20,
 		'meta_key'   => '_swi_merit_retry',
 		'meta_value' => '1',
@@ -345,7 +345,7 @@ function swi_do_simplebooks_retry(): void {
 		return;
 	}
 
-	$orders = wc_get_orders( [
+	$orders = wc_get_orders( [ 'type' => 'shop_order',
 		'limit'      => 20,
 		'meta_key'   => '_swi_simplebooks_retry',
 		'meta_value' => '1',
@@ -412,7 +412,7 @@ function swi_do_smartaccounts_retry(): void {
 		return;
 	}
 
-	$orders = wc_get_orders( [
+	$orders = wc_get_orders( [ 'type' => 'shop_order',
 		'limit'      => 20,
 		'meta_key'   => '_swi_smartaccounts_retry',
 		'meta_value' => '1',

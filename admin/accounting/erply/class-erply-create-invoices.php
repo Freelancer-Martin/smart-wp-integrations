@@ -60,7 +60,7 @@ class SWI_Erply_Create_Invoices {
         if ( get_option( 'swi_erply_enable' ) !== 'yes' ) return;
 
         $status = get_option( 'swi_erply_order_status', 'wc-completed' );
-        $orders = wc_get_orders( [
+        $orders = wc_get_orders( [ 'type' => 'shop_order',
             'limit'   => 20,
             'status'  => $status,
             'orderby' => 'id',
@@ -125,7 +125,7 @@ class SWI_Erply_Create_Invoices {
         }
 
         $status = get_option( 'swi_erply_order_status', 'wc-completed' );
-        $all    = wc_get_orders( [ 'limit' => 200, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+        $all    = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 200, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
         $orders = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_erply' ) ), 0, 50 );
 
         if ( empty( $orders ) ) {
@@ -204,7 +204,7 @@ class SWI_Erply_Create_Invoices {
         }
 
         $status  = get_option( 'swi_erply_order_status', 'wc-completed' );
-        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
+        $orders  = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 100, 'status' => $status ] );
         $rows    = [];
         $inv_map = []; // invoice_id → order objekt
 

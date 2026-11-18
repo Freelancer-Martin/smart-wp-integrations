@@ -83,7 +83,7 @@ class SWI_Simplebooks_Create_Invoices {
         if ( get_option( 'swi_simplebooks_enable' ) !== 'yes' ) return;
 
         $status = get_option( 'swi_simplebooks_order_status', 'wc-completed' );
-        $orders = wc_get_orders( [ 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+        $orders = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 20, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
 
         foreach ( $orders as $order ) {
             if ( $order->get_meta( '_swi_sent_simplebooks' ) ) continue;
@@ -324,7 +324,7 @@ class SWI_Simplebooks_Create_Invoices {
         }
 
         $status = preg_replace( '/^wc-/', '', (string) get_option( 'swi_simplebooks_order_status', 'wc-completed' ) );
-        $all    = wc_get_orders( [ 'status' => $status, 'limit' => 200 ] );
+        $all    = wc_get_orders( [ 'type' => 'shop_order', 'status' => $status, 'limit' => 200 ] );
         $orders = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sent_simplebooks' ) ), 0, 50 );
 
         if ( empty( $orders ) ) {
@@ -456,7 +456,7 @@ class SWI_Simplebooks_Create_Invoices {
 
         $status = preg_replace( '/^wc-/', '', (string) get_option( 'swi_simplebooks_order_status', 'wc-completed' ) );
         $prefix = get_option( 'swi_simplebooks_prefix', 'SB' );
-        $orders = wc_get_orders( [ 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] );
+        $orders = wc_get_orders( [ 'type' => 'shop_order', 'status' => $status, 'limit' => -1, 'orderby' => 'date', 'order' => 'DESC' ] );
 
         $rows = [];
         foreach ( $orders as $order ) {

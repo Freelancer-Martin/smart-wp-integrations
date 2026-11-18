@@ -416,7 +416,7 @@ class SWI_SmartAccounts_Create_Invoices {
         $status  = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
         $api_url = get_option( 'swi_api_url', '' );
         $lic_key = get_option( 'swi_smartaccounts_license_key', get_option( 'swi_license_key', '' ) );
-        $orders  = wc_get_orders( [ 'limit' => 100, 'status' => $status ] );
+        $orders  = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 100, 'status' => $status ] );
 
         // Küsi SA-st kõik tegelikult olemasolevad arvenumbrid
         $sa_numbers = [];
@@ -554,7 +554,7 @@ class SWI_SmartAccounts_Create_Invoices {
         }
 
         $status   = get_option( 'swi_smartaccounts_order_status', 'wc-completed' );
-        $all      = wc_get_orders( [ 'limit' => 200, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
+        $all      = wc_get_orders( [ 'type' => 'shop_order', 'limit' => 200, 'status' => $status, 'orderby' => 'id', 'order' => 'ASC' ] );
         $orders   = array_slice( array_filter( $all, fn( $o ) => ! $o->get_meta( '_swi_sa_invoice_number' ) ), 0, 50 );
 
         // Debug: kui 0 orderit, tagasta info miks
