@@ -2825,12 +2825,15 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                             return;
                         }
 
-                        var html = '<p style="margin:0 0 8px;"><span style="color:#b32d2e"><strong>' + missing.length + ' arvet</strong> puudub Meritist</span></p>';
+                        var html = '<p style="margin:0 0 8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+                            + '<span style="color:#b32d2e"><strong>' + missing.length + ' arvet</strong> puudub Meritist</span>'
+                            + '<button type="button" class="button button-primary button-small" id="swi-resend-all">Saada kõik puuduvad (' + missing.length + ')</button>'
+                            + '<span id="swi-resend-progress" style="font-size:12px;color:#6b7280;"></span></p>';
                         html += '<table class="widefat striped" style="max-width:860px;">'
                             + '<thead><tr><th>Arve nr</th><th>Kuupäev</th><th>Summa</th><th>Saadetud</th><th></th></tr></thead><tbody>';
                         missing.forEach(function(r) {
                             html += '<tr>'
-                                + '<td><a href="post.php?post=' + r.order_id + '&action=edit" target="_blank">' + r.invoice_no + '</a></td>'
+                                + '<td><a href="admin.php?page=wc-orders&action=edit&id=' + r.order_id + '" target="_blank">' + r.invoice_no + '</a></td>'
                                 + '<td>' + r.date + '</td>'
                                 + '<td>' + r.total + '</td>'
                                 + '<td style="font-size:11px;color:#666">' + (r.meta_sent || '—') + '</td>'
@@ -2840,14 +2843,29 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                         html += '</tbody></table>';
                         result.innerHTML = html;
 
-                        // Resend nupud
-                        result.querySelectorAll('.swi-resend-btn').forEach(function(b) {
-                            b.addEventListener('click', function() {
-                                var orderId = this.getAttribute('data-id');
-                                var row = this.closest('tr');
-                                this.disabled = true;
-                                this.textContent = 'Saadan...';
-                                var self = this;
+                        var meritErrors = {
+                            'Korduv arve number': 'See arve on Meriti juba olemas. Kui soovid uuesti saata, kustuta arve esmalt Merit Aktivas.',
+                            'Ridade summa ei võrdu arve summaga': 'Arve ridade kogusumma ei klapi arvele märgitud summaga. Kontrolli toodete hindu WooCommerce-is.',
+                            'Periood liiga pikk': 'Päringus valitud ajaperiood on liiga pikk — Merit lubab korraga max 3 kuud.',
+                            'kaubakoodi liiga pikk': 'Toote SKU kood on liiga pikk (max 20 tähemärki). Lühenda SKU-d WooCommerce toote seadetes.'
+                        };
+                        function swiFriendlyError(d) {
+                            d = d || {};
+                            var raw = (d.response && d.response.result && d.response.result.merit_message)
+                                || (d.response && d.response.result && d.response.result.body)
+                                || d.merit_message || d.message || d.error || '';
+                            var friendly = '';
+                            Object.keys(meritErrors).forEach(function(key) { if (raw.indexOf(key) !== -1) friendly = meritErrors[key]; });
+                            return friendly || ('Merit Aktiva tagastas vea: ' + (raw || 'tundmatu viga'));
+                        }
+
+                        // Üks saatmine (rea nupp ja "Saada kõik" kasutavad sama) — tagastab Promise<bool>
+                        function swiResend(b) {
+                            return new Promise(function(resolve) {
+                                var orderId = b.getAttribute('data-id');
+                                var row = b.closest('tr');
+                                b.disabled = true;
+                                b.textContent = 'Saadan...';
                                 jQuery.post(ajaxurl, {
                                     action: 'swi_merit_sync_resend',
                                     security: MyAjax.nonce,
@@ -2855,30 +2873,54 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                 }, function(r2) {
                                     if (r2.success) {
                                         row.cells[3].innerHTML = '<span style="color:#0a6b23">✓ Saadetud</span>';
-                                        row.cells[5].innerHTML = '';
-                                        swiNotify('Arve ' + orderId + ' edastatud Merit Aktivasse.', 'ok');
+                                        row.cells[4].innerHTML = '';
+                                        resolve(true);
                                     } else {
-                                        self.textContent = 'Saada uuesti';
-                                        self.disabled = false;
-                                        var d = r2.data || {};
-                                        var raw = (d.response && d.response.result && d.response.result.merit_message)
-                                            || (d.response && d.response.result && d.response.result.body)
-                                            || d.merit_message || d.message || '';
-                                        var meritErrors = {
-                                            'Korduv arve number': 'See arve on Meriti juba olemas. Kui soovid uuesti saata, kustuta arve esmalt Merit Aktivas.',
-                                            'Ridade summa ei võrdu arve summaga': 'Arve ridade kogusumma ei klapi arvele märgitud summaga. Kontrolli toodete hindu WooCommerce-is.',
-                                            'Periood liiga pikk': 'Päringus valitud ajaperiood on liiga pikk — Merit lubab korraga max 3 kuud.',
-                                            'kaubakoodi liiga pikk': 'Toote SKU kood on liiga pikk (max 20 tähemärki). Lühenda SKU-d WooCommerce toote seadetes.',
-                                        };
-                                        var friendly = raw;
-                                        Object.keys(meritErrors).forEach(function(key) {
-                                            if (raw.indexOf(key) !== -1) friendly = meritErrors[key];
-                                        });
-                                        if (friendly === raw) friendly = 'Merit Aktiva tagastas vea: ' + (raw || 'tundmatu viga') + '. Vaata logifaili täpsema info saamiseks.';
-                                        swiNotify('Arve ' + orderId + ': ' + friendly, 'error');
+                                        b.textContent = 'Saada uuesti';
+                                        b.disabled = false;
+                                        row.cells[3].innerHTML = '<span style="color:#b32d2e">✗ ' + jQuery('<div>').text(swiFriendlyError(r2.data)).html() + '</span>';
+                                        resolve(false);
                                     }
+                                }).fail(function() {
+                                    b.textContent = 'Saada uuesti';
+                                    b.disabled = false;
+                                    row.cells[3].innerHTML = '<span style="color:#b32d2e">✗ Serveri viga</span>';
+                                    resolve(false);
                                 });
                             });
+                        }
+
+                        result.querySelectorAll('.swi-resend-btn').forEach(function(b) {
+                            b.addEventListener('click', function() {
+                                var orderId = b.getAttribute('data-id');
+                                swiResend(b).then(function(ok) {
+                                    swiNotify(ok ? 'Arve ' + orderId + ' edastatud Merit Aktivasse.' : 'Arve ' + orderId + ' saatmine ebaõnnestus — põhjus on tabelis.', ok ? 'ok' : 'error');
+                                });
+                            });
+                        });
+
+                        // Saada kõik puuduvad: ükshaaval (Meriti päringulimiit), edenemine ja kokkuvõte
+                        var allBtn = document.getElementById('swi-resend-all');
+                        allBtn.addEventListener('click', function() {
+                            var queue = Array.prototype.slice.call(result.querySelectorAll('.swi-resend-btn')).filter(function(b) { return !b.disabled; });
+                            if (!queue.length) return;
+                            var progress = document.getElementById('swi-resend-progress');
+                            var ok = 0, fail = 0, i = 0;
+                            allBtn.disabled = true;
+                            (function next() {
+                                if (i >= queue.length) {
+                                    progress.textContent = 'Valmis: saadetud ' + ok + ', ebaõnnestus ' + fail + '.';
+                                    allBtn.disabled = fail === 0;
+                                    if (fail) allBtn.textContent = 'Proovi ebaõnnestunuid uuesti (' + fail + ')';
+                                    swiNotify('Saadetud ' + ok + ', ebaõnnestus ' + fail + '.', fail ? 'error' : 'ok');
+                                    return;
+                                }
+                                progress.textContent = 'Saadan ' + (i + 1) + '/' + queue.length + '…';
+                                swiResend(queue[i++]).then(function(res) {
+                                    if (res) ok++; else fail++;
+                                    setTimeout(next, 300);
+                                });
+                            })();
                         });
                     });
                 });
