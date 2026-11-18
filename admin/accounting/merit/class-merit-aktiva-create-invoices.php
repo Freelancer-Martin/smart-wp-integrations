@@ -148,6 +148,15 @@ class My_Simple_Ajax_Plugin {
     /** Eelvaade: ära loo Meritis kliente/tooteid, ainult koosta payload. */
     public $dry_run = false;
 
+    /**
+     * Tellimuse Meriti arve number: saatmisel salvestatud number (_swi_merit_invoice_no), muidu
+     * praegune eesliide + tellimuse ID. Nii jääb seos arvega alles ka pärast eesliite muutmist.
+     */
+    public function invoice_no_for( \WC_Order $order ): string {
+        $stored = (string) $order->get_meta( '_swi_merit_invoice_no' );
+        return $stored !== '' ? $stored : $this->arve_eesliides . $order->get_id();
+    }
+
     /** Rea KM summa hoitakse ajutises võtmes '_tax' kuni TaxAmount kokkuvõtte koostamiseni. */
     const ROW_TAX_KEY = '_tax';
 
@@ -564,7 +573,7 @@ class My_Simple_Ajax_Plugin {
             $exists = false;
             if ( is_array( $results ) ) {
                 foreach ( $results as $invoice ) {
-                    if ( $this->arve_eesliides . $order->get_id() === $invoice->InvoiceNo ) {
+                    if ( $this->invoice_no_for( $order ) === $invoice->InvoiceNo ) {
                         $exists = true;
                         break;
                     }
@@ -802,7 +811,7 @@ class My_Simple_Ajax_Plugin {
             'Customer'       => $customer,
             'DocDate'        => $doc_date,
             'DueDate'        => $due_date,
-            'InvoiceNo'      => $this->arve_eesliides . $order->get_id(),
+            'InvoiceNo'      => $this->invoice_no_for( $order ),
             'DepartmentCode' => $dept_code,
             'InvoiceRow'     => $rows,
             'TotalAmount'    => $total_amount,
@@ -814,6 +823,13 @@ class My_Simple_Ajax_Plugin {
         $payment = $this->payment_object_for_order( $order );
         if ( $payment ) {
             $payload['Payment'] = $payment;
+        }
+
+        // Arve number kinnitatakse tellimusele: kordussaatmine, nupud, PDF ja kreediitarve kasutavad
+        // sama numbrit ka siis, kui eesliidet hiljem muudetakse (eelvaade numbrit ei salvesta)
+        if ( ! $this->dry_run && $order->get_meta( '_swi_merit_invoice_no' ) === '' ) {
+            $order->update_meta_data( '_swi_merit_invoice_no', $payload['InvoiceNo'] );
+            $order->save();
         }
 
         return $payload;
@@ -880,7 +896,7 @@ class My_Simple_Ajax_Plugin {
         $tax_amount_arr = $this->build_tax_amounts( $rows, $main_tax_id, $total_tax );
 
         // Kreediitarve number peab Meriti jaoks olema unikaalne — algse arve numbrile lisame refundi ID
-        $base['InvoiceNo']   = $this->arve_eesliides . $order->get_id() . '-C' . $refund->get_id();
+        $base['InvoiceNo']   = $this->invoice_no_for( $order ) . '-C' . $refund->get_id();
         $base['DocDate']     = $refund->get_date_created() ? $refund->get_date_created()->date( 'Ymd' ) : gmdate( 'Ymd' );
         $base['DueDate']     = $base['DocDate'];
         $base['InvoiceRow']  = $rows;
@@ -1235,7 +1251,7 @@ class My_Simple_Ajax_Plugin {
             wp_send_json_error( [ 'message' => 'Vali Meriti seadetes (Osakonnad → Makse pangakonto) pangakonto, kuhu makse registreeritakse.' ] );
         }
 
-        $invoice_no = $this->arve_eesliides . $order->get_id();
+        $invoice_no = $this->invoice_no_for( $order );
 
         try {
             $client = new MeritServersDataClient();
@@ -1321,7 +1337,7 @@ class My_Simple_Ajax_Plugin {
             wp_send_json_error( [ 'message' => 'Orderit ei leitud.' ] );
         }
 
-        $invoice_no = $this->arve_eesliides . $order->get_id();
+        $invoice_no = $this->invoice_no_for( $order );
 
         try {
             $client = new MeritServersDataClient();
@@ -1362,7 +1378,7 @@ class My_Simple_Ajax_Plugin {
             wp_send_json_error( [ 'message' => 'Orderit ei leitud.' ] );
         }
 
-        $invoice_no = $this->arve_eesliides . $order->get_id();
+        $invoice_no = $this->invoice_no_for( $order );
 
         try {
             $client = new MeritServersDataClient();
@@ -1495,7 +1511,7 @@ class My_Simple_Ajax_Plugin {
 
         $rows = [];
         foreach ( $orders as $order ) {
-            $inv_no   = $prefix . $order->get_id();
+            $inv_no   = (string) $order->get_meta( '_swi_merit_invoice_no' ) ?: $prefix . $order->get_id();
             // in_array strict mode tagab et ei juhtu tüübist sõltuv võrdlusviga
             $in_merit = in_array( $inv_no, $merit_nos, true );
             $meta     = $order->get_meta( '_swi_sent_merit' );
@@ -1638,7 +1654,7 @@ class My_Simple_Ajax_Plugin {
         }
 
         try {
-            $pdf = ( new MeritServersDataClient() )->get_invoice_pdf( $this->arve_eesliides . $order->get_id() );
+            $pdf = ( new MeritServersDataClient() )->get_invoice_pdf( $this->invoice_no_for( $order ) );
         } catch ( \Exception $e ) {
             $order->add_order_note( 'Merit Aktiva: arve PDF-i ei õnnestunud e-kirjale lisada — ' . $e->getMessage() );
             return $attachments;
