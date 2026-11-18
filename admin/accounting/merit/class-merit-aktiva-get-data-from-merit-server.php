@@ -83,6 +83,25 @@ class MeritServersDataClient {
     }
 
     /**
+     * Tagastab Meriti pangakontod kujul [ BankId => 'Nimi (konto)' ].
+     * Kasutatakse seadetes makse pangakonto valikuks — Meriti sendpayment nõuab BankId-d.
+     */
+    public function getBanks(): array {
+        $cached = get_transient( 'swi_merit_banks' );
+        if ( $cached !== false ) return $cached;
+
+        $data  = $this->call( 'merit/banks' );
+        $banks = [];
+        foreach ( (array) ( $data['banks'] ?? [] ) as $b ) {
+            if ( empty( $b['BankId'] ) ) continue;
+            $banks[ $b['BankId'] ] = trim( ( $b['Name'] ?? '' ) . ' (' . ( $b['AccountCode'] ?? '' ) . ')' );
+        }
+
+        set_transient( 'swi_merit_banks', $banks, 10 * MINUTE_IN_SECONDS );
+        return $banks;
+    }
+
+    /**
      * Tagastab viimase perioodi müügiarved Merit Aktivast.
      *
      * Kasutatakse peamiselt topeltsaatmise kontrolliks — enne uue arve saatmist
@@ -275,8 +294,9 @@ class MeritServersDataClient {
      * @param string|null $customer_name Kliendi nimi (valikuline, aitab Meritil täpsemalt sobitada).
      * @return array Laravel-i proxy vastus.
      */
-    public function send_payment( string $invoice_no, float $amount, string $payment_date, ?string $customer_name = null ): array {
+    public function send_payment( string $invoice_no, float $amount, string $payment_date, ?string $customer_name = null, ?string $bank_id = null ): array {
         return $this->call_post( 'merit/payment', [
+            'bank_id'       => $bank_id,
             'invoice_no'    => $invoice_no,
             'amount'        => $amount,
             'payment_date'  => $payment_date,

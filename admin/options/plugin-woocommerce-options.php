@@ -611,6 +611,26 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                                             <?php endif; ?>
                                         </td>
                                     </tr>
+                                    <?php
+                                    $merit_banks = [];
+                                    try { $merit_banks = (array) $client2->getBanks(); } catch (\Exception $e) {}
+                                    $saved_bank = get_option('swi_merit_payment_bank_id', '');
+                                    ?>
+                                    <tr>
+                                        <th style="width:230px;padding:10px 0;font-size:12.5px;font-weight:600;color:#374151;">Makse pangakonto</th>
+                                        <td style="padding:8px 0;">
+                                            <select name="swi_merit_payment_bank_id" style="min-width:300px;">
+                                                <option value="">— vali pangakonto —</option>
+                                                <?php foreach ($merit_banks as $bid => $bname) : ?>
+                                                <option value="<?php echo esc_attr($bid); ?>" <?php selected($saved_bank, $bid); ?>><?php echo esc_html($bname); ?></option>
+                                                <?php endforeach; ?>
+                                                <?php if ($saved_bank && !isset($merit_banks[$saved_bank])) : ?>
+                                                <option value="<?php echo esc_attr($saved_bank); ?>" selected><?php echo esc_html($saved_bank); ?></option>
+                                                <?php endif; ?>
+                                            </select>
+                                            <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">Konto, kuhu "Märgi makstuks Meritis" makse registreeritakse.</p>
+                                        </td>
+                                    </tr>
                                 </table>
                             </div>
                             <?php
@@ -3515,6 +3535,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'smart_wp_integtaion_maksumaar',
                 'smart_wp_integtaion_arve_ridade_tyyp',
                 'smart_wp_integtaion_deparment',
+                'swi_merit_payment_bank_id',
                 'swi_merit_location_code',
                 'swi_merit_shipping_maksumaar',
                 'swi_merit_tax_zero',
@@ -3608,6 +3629,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
                 'smart_wp_integtaion_maksumaar',
                 'smart_wp_integtaion_arve_ridade_tyyp',
                 'smart_wp_integtaion_deparment',
+                'swi_merit_payment_bank_id',
                 'smart_wp_integtaion_enable',
                 'smart_wp_integtaion_payment_map',
                 'smart_wp_integtaion_shipping_map',

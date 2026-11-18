@@ -262,9 +262,9 @@ class SWI_Order_Metabox {
                     btn.prop('disabled', false);
                     if (r.success) {
                         var d = r.data;
-                        var status = d.paid ? '✓ Tasutud' : '– Tasumata';
-                        msg.css('color', d.paid ? '#16a34a' : '#6b7280')
-                           .text(status + ' | Summa: ' + d.total + ' (makstud: ' + (d.paidAmount ?? 0) + ')');
+                        var status = d.paid ? '✓ Tasutud' : '– Makset pole Meritis registreeritud';
+                        msg.css('color', d.paid ? '#16a34a' : '#b45309')
+                           .text('Arve ' + (d.invoice_no || '') + ' leitud Meritis | ' + status + ' | Summa: ' + d.total + ' (makstud: ' + (d.paidAmount ?? 0) + ')');
                     } else {
                         msg.css('color','#dc2626').text('✗ ' + ((r.data && r.data.message) || 'Viga'));
                     }

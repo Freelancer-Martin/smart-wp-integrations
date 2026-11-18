@@ -1211,6 +1211,11 @@ class My_Simple_Ajax_Plugin {
             wp_send_json_error( [ 'message' => 'Arve saadeti Meritisse juba tasutuna (makseviis "' . $paid_in_invoice['PaymentMethod'] . '") — eraldi makset pole vaja.' ] );
         }
 
+        $bank_id = (string) get_option( 'swi_merit_payment_bank_id', '' );
+        if ( $bank_id === '' ) {
+            wp_send_json_error( [ 'message' => 'Vali Meriti seadetes (Osakonnad → Makse pangakonto) pangakonto, kuhu makse registreeritakse.' ] );
+        }
+
         $invoice_no = $this->arve_eesliides . $order->get_id();
 
         try {
@@ -1219,7 +1224,8 @@ class My_Simple_Ajax_Plugin {
                 $invoice_no,
                 (float) $order->get_total(),
                 gmdate( 'Y-m-d' ),
-                trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() )
+                trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
+                $bank_id
             );
         } catch ( \Exception $e ) {
             wp_send_json_error( [ 'message' => $e->getMessage() ] );
@@ -1311,6 +1317,7 @@ class My_Simple_Ajax_Plugin {
         }
 
         wp_send_json_success( [
+            'invoice_no' => $header['InvoiceNo'] ?? $invoice_no,
             'paid'   => ! empty( $header['Paid'] ),
             'total'  => $header['TotalSum'] ?? $header['TotalAmount'] ?? null,
             'paidAmount' => $header['PaidAmount'] ?? null,
