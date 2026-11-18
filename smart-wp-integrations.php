@@ -417,3 +417,21 @@ function run_smart_wp_integrations() {
 
 }
 run_smart_wp_integrations();
+
+/**
+ * Lisab vaheserverisse minevatele päringutele saidi aadressi (X-Site-Url).
+ *
+ * Vaheserver seob litsentsi domeeniga: litsentsivõtmega päring peab tulema mõnelt litsentsi
+ * domeenilt. Üks filter katab kõik moodulid (Merit, Simplebooks, SA, Erply, kullerid jne).
+ */
+add_filter( 'http_request_args', function ( $args, $url ) {
+	$base = rtrim( (string) get_option( 'smart_wp_integration_server_url', '' ), '/' );
+	if ( $base === '' && class_exists( 'LocalApiClient' ) ) {
+		$base = rtrim( LocalApiClient::get_base_url_public(), '/' );
+	}
+	if ( $base !== '' && strpos( (string) $url, $base . '/api/' ) === 0 && is_array( $args['headers'] ?? [] ) ) {
+		$args['headers']               = (array) ( $args['headers'] ?? [] );
+		$args['headers']['X-Site-Url'] = home_url();
+	}
+	return $args;
+}, 10, 2 );
